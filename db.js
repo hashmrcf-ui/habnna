@@ -138,32 +138,6 @@ const msgQueries = {
   updateStatus: db.prepare(`UPDATE messages SET status = ? WHERE id = ?`)
 };
 
-// ── User / Message Mappers ────────────────────────────────────────
-
-function mapUser(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.display_name,
-    avatar: row.avatar,
-    hashedPw: row.hashed_pw,
-    status: row.status,
-    totpSecret: row.totp_secret || null,
-    totpEnabled: !!row.totp_enabled,
-    banned: !!row.banned,
-    banReason: row.ban_reason || null,
-    lastSeen: row.last_seen || null,
-    createdAt: row.created_at
-  };
-}
-
-function safeUser(user) {
-  if (!user) return null;
-  const { hashedPw, totpSecret, ...safe } = user;
-  return safe;
-}
-
 // ── High-level DB Functions ───────────────────────────────────────
 
 function createUser({ id, username, displayName, avatar, hashedPw, status }) {
@@ -290,6 +264,7 @@ function updateMessageStatus(msgId, status) {
 
 // ── Mappers ───────────────────────────────────────────────────────
 function mapUser(row) {
+  if (!row) return null;
   return {
     id: row.id,
     username: row.username,
@@ -299,6 +274,9 @@ function mapUser(row) {
     status: row.status,
     totpSecret: row.totp_secret || null,
     totpEnabled: !!row.totp_enabled,
+    banned: !!row.banned,
+    banReason: row.ban_reason || null,
+    lastSeen: row.last_seen || null,
     createdAt: row.created_at
   };
 }
@@ -419,7 +397,8 @@ const adminQueries = {
 
 function getAllUsers() {
   return adminQueries.getAllUsers.all().map(row => {
-    const safe = safeUser(row);
+    const user = mapUser(row);        // snake_case → camelCase
+    const safe = safeUser(user);      // remove hashedPw, totpSecret
     return {
       ...safe,
       messageCount: row.message_count,
