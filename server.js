@@ -646,9 +646,9 @@ const adminLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 });
 
 app.post('/api/admin/login', adminLimiter, (req, res) => {
   const { password } = req.body;
-  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+  const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '').trim();
   if (!ADMIN_PASSWORD) return res.status(503).json({ error: 'لم يتم ضبط ADMIN_PASSWORD في المتغيرات' });
-  if (password !== ADMIN_PASSWORD) {
+  if ((password || '').trim() !== ADMIN_PASSWORD) {
     secLog('ADMIN_LOGIN_FAIL', { ip: req.ip });
     return res.status(401).json({ error: 'كلمة مرور الأدمن غير صحيحة' });
   }
