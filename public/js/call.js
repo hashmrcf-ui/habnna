@@ -130,6 +130,13 @@ const AmeenCall = (() => {
 
     await room.connect(url, lkToken);
 
+    // Attach tracks from participants who were already in the room before us
+    room.remoteParticipants.forEach(participant => {
+      participant.tracks.forEach(pub => {
+        if (pub.isSubscribed && pub.track) attachTrack(pub.track);
+      });
+    });
+
     // Publish local tracks
     const tracks = await LivekitClient.createLocalTracks({
       audio: true,
