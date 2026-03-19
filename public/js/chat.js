@@ -606,11 +606,11 @@ function closeImgPreview() {
 async function confirmSendImage() {
   if (!_pendingImageFile || !activeConvId) return;
   const caption = document.getElementById('img-caption-input').value.trim();
+  const fileToUpload = _pendingImageFile; // ← save ref BEFORE clearing
   closeImgPreview();
 
   try {
-    const data = await uploadWithProgress(_pendingImageFile);
-    // Store caption together with URL as JSON so receiver can display it
+    const data = await uploadWithProgress(fileToUpload);
     const content = caption
       ? JSON.stringify({ url: data.url, caption })
       : data.url;
@@ -621,7 +621,7 @@ async function confirmSendImage() {
     });
     showToast('✅ تم إرسال الصورة');
   } catch (e) {
-    showToast('❌ فشل رفع الصورة');
+    showToast('❌ فشل رفع الصورة: ' + (e.message || ''));
   }
 }
 
