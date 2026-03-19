@@ -9,14 +9,15 @@ const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] },
-  transports: ['websocket', 'polling']
-});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ameen_secure_secret_2024_!@#';
 const PORT = process.env.PORT || 3000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
+
+const io = new Server(server, {
+  cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] },
+  transports: ['websocket', 'polling']
+});
 
 // Online users: userId -> socketId
 const onlineUsers = new Map();
