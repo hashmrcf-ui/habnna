@@ -91,8 +91,9 @@ const AmeenCall = (() => {
       dynacast: true
     });
 
-    // Handle remote tracks
+    // Central function to attach any remote track
     const attachTrack = (track) => {
+      if (!track || !track.mediaStreamTrack) return;
       if (track.kind === LivekitClient.Track.Kind.Video) {
         const el = document.getElementById('call-remote-video');
         if (el) {
@@ -105,17 +106,35 @@ const AmeenCall = (() => {
           el.srcObject = new MediaStream([track.mediaStreamTrack]);
           el.play().catch(() => {});
         } else {
-          track.attach();
+          // Create a new audio element and append it
+          const audio = document.createElement('audio');
+          audio.autoplay = true;
+          audio.srcObject = new MediaStream([track.mediaStreamTrack]);
+          document.body.appendChild(audio);
+          audio.play().catch(() => {});
         }
       }
     };
 
+    // Helper to scan all remoteParticipants and attach subscribed tracks
+    const scanParticipants = () => {
+      room.remoteParticipants.forEach(participant => {
+        participant.tracks.forEach(pub => {
+          if (pub.isSubscribed && pub.track) attachTrack(pub.track);
+          // Also listen for when track becomes available later
+          pub.on('subscribed', (track) => attachTrack(track));
+        });
+      });
+    };
+
+    // Event: a new track from a remote participant was subscribed
     room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => attachTrack(track));
 
-    // In case remote participant is already in the room
+    // Event: a new remote participant connected
     room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
       participant.tracks.forEach(pub => {
-        if (pub.track) attachTrack(pub.track);
+        if (pub.isSubscribed && pub.track) attachTrack(pub.track);
+        pub.on('subscribed', (track) => attachTrack(track));
       });
     });
 
@@ -126,16 +145,16 @@ const AmeenCall = (() => {
     room.on(LivekitClient.RoomEvent.Connected, () => {
       updateCallState('connected');
       startCallTimer();
+      // Scan once right after connection confirmed
+      scanParticipants();
     });
 
     await room.connect(url, lkToken);
 
-    // Attach tracks from participants who were already in the room before us
-    room.remoteParticipants.forEach(participant => {
-      participant.tracks.forEach(pub => {
-        if (pub.isSubscribed && pub.track) attachTrack(pub.track);
-      });
-    });
+    // Scan immediately (for participants already in room at connect time)
+    scanParticipants();
+    // And again after 800ms as a safety net for slow subscriptions
+    setTimeout(scanParticipants, 800);
 
     // Publish local tracks
     const tracks = await LivekitClient.createLocalTracks({
