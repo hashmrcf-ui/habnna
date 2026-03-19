@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>لوحة التحكم — آمين ماسنجر</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#07071a;--surface:#0e0e24;--surface2:#13132e;
+      --border:rgba(108,99,255,0.18);--accent:#6C63FF;
+      --accent2:#3B82F6;--green:#22c55e;--red:#ef4444;
+      --yellow:#f59e0b;--text:#e0e0e0;--muted:#666;
+    }
+    body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex}
+
+    /* Sidebar */
+    .sidebar{width:240px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;right:0;top:0;bottom:0;z-index:100}
+    .logo{padding:24px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+    .logo-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px}
+    .logo h2{font-size:1rem;font-weight:800;color:#fff}
+    .logo span{font-size:0.7rem;color:var(--muted);display:block}
+    nav{flex:1;padding:16px 12px;overflow-y:auto}
+    .nav-label{font-size:0.7rem;color:var(--muted);letter-spacing:1px;padding:12px 8px 6px;text-transform:uppercase}
+    .nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer;color:#aaa;font-size:0.9rem;transition:all 0.2s;margin-bottom:2px;border:none;background:none;width:100%;text-align:right}
+    .nav-item:hover{background:rgba(108,99,255,0.12);color:#fff}
+    .nav-item.active{background:rgba(108,99,255,0.2);color:var(--accent);font-weight:700}
+    .nav-item .icon{font-size:18px;width:24px;text-align:center}
+    .sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+    .admin-badge{background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px}
+    .admin-badge .dot{width:8px;height:8px;background:var(--green);border-radius:50%;animation:blink 2s infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+    .logout-btn{width:100%;margin-top:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:8px;color:#f87171;font-family:'Tajawal',sans-serif;cursor:pointer;font-size:0.85rem;transition:all 0.2s}
+    .logout-btn:hover{background:rgba(239,68,68,0.2)}
+
+    /* Main */
+    .main{margin-right:240px;flex:1;display:flex;flex-direction:column;min-width:0}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+    .topbar h1{font-size:1.2rem;font-weight:700}
+    .topbar-right{display:flex;align-items:center;gap:12px}
+    .online-pill{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:var(--green);padding:5px 14px;border-radius:20px;font-size:0.8rem;display:flex;align-items:center;gap:6px}
+    .refresh-btn{background:rgba(108,99,255,0.15);border:1px solid var(--border);color:var(--accent);padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:0.85rem;transition:all 0.2s}
+    .refresh-btn:hover{background:rgba(108,99,255,0.25)}
+    .content{padding:28px;flex:1}
+
+    /* Pages */
+    .page{display:none}
+    .page.active{display:block}
+
+    /* Stats Grid */
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;transition:transform 0.2s}
+    .stat-card:hover{transform:translateY(-2px)}
+    .stat-card .label{color:var(--muted);font-size:0.8rem;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+    .stat-card .value{font-size:2rem;font-weight:800;color:#fff}
+    .stat-card .sub{font-size:0.75rem;color:var(--muted);margin-top:4px}
+    .stat-card.green .value{color:var(--green)}
+    .stat-card.red .value{color:var(--red)}
+    .stat-card.blue .value{color:var(--accent2)}
+    .stat-card.purple .value{color:var(--accent)}
+
+    /* Tables */
+    .section{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin-bottom:20px;overflow:hidden}
+    .section-header{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .section-header h3{font-size:1rem;font-weight:700}
+    .search-bar{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:#fff;font-family:'Tajawal',sans-serif;font-size:0.85rem;outline:none;width:220px}
+    .search-bar:focus{border-color:var(--accent)}
+    table{width:100%;border-collapse:collapse}
+    th{padding:10px 16px;text-align:right;font-size:0.75rem;color:var(--muted);letter-spacing:0.5px;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.02)}
+    td{padding:12px 16px;font-size:0.875rem;border-bottom:1px solid rgba(255,255,255,0.04)}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(255,255,255,0.02)}
+    .avatar{width:32px;height:32px;border-radius:50%;object-fit:cover}
+    .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:600}
+    .badge.online{background:rgba(34,197,94,0.15);color:var(--green)}
+    .badge.offline{background:rgba(100,100,100,0.15);color:#888}
+    .badge.banned{background:rgba(239,68,68,0.15);color:var(--red)}
+    .badge.direct{background:rgba(59,130,246,0.15);color:var(--accent2)}
+    .badge.group{background:rgba(108,99,255,0.15);color:var(--accent)}
+    .actions{display:flex;gap:6px;justify-content:flex-end}
+    .btn{border:none;border-radius:6px;padding:5px 12px;font-size:0.8rem;cursor:pointer;font-family:'Tajawal',sans-serif;transition:all 0.2s;font-weight:600}
+    .btn-ban{background:rgba(245,158,11,0.15);color:var(--yellow);border:1px solid rgba(245,158,11,0.3)}
+    .btn-ban:hover{background:rgba(245,158,11,0.3)}
+    .btn-unban{background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
+    .btn-unban:hover{background:rgba(34,197,94,0.3)}
+    .btn-kick{background:rgba(59,130,246,0.15);color:var(--accent2);border:1px solid rgba(59,130,246,0.3)}
+    .btn-kick:hover{background:rgba(59,130,246,0.3)}
+    .btn-del{background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+    .btn-del:hover{background:rgba(239,68,68,0.3)}
+    .btn-backup{background:rgba(108,99,255,0.2);color:var(--accent);border:1px solid var(--border);padding:8px 18px;font-size:0.9rem}
+    .btn-backup:hover{background:rgba(108,99,255,0.35)}
+
+    /* Logs */
+    .logs-area{max-height:480px;overflow-y:auto;padding:16px}
+    .log-line{font-family:monospace;font-size:0.78rem;padding:4px 8px;border-radius:4px;margin-bottom:3px;white-space:pre-wrap;word-break:break-all}
+    .log-line.FAIL,.log-line.UNAUTH{background:rgba(239,68,68,0.08);color:#fca5a5}
+    .log-line.OK,.log-line.BACKUP_OK{background:rgba(34,197,94,0.08);color:#86efac}
+    .log-line.BAN{background:rgba(245,158,11,0.08);color:#fcd34d}
+    .log-line.ADMIN{background:rgba(108,99,255,0.08);color:#a5b4fc}
+    .log-line.default{color:#666}
+    .log-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+    .filter-badge{padding:4px 12px;border-radius:20px;font-size:0.75rem;cursor:pointer;border:1px solid var(--border);background:transparent;color:#888;transition:all 0.2s}
+    .filter-badge.active{background:rgba(108,99,255,0.2);color:var(--accent);border-color:var(--accent)}
+
+    /* System info */
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+    .info-row{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+    .info-row:last-child{border:none}
+    .info-row .key{color:var(--muted);font-size:0.85rem}
+    .info-row .val{font-weight:600;color:#fff;font-size:0.85rem}
+    .progress-bar{background:rgba(255,255,255,0.08);border-radius:8px;height:6px;margin-top:6px;overflow:hidden}
+    .progress-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 1s}
+
+    /* Modal */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;align-items:center;justify-content:center}
+    .modal-overlay.show{display:flex}
+    .modal{background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:28px;max-width:400px;width:90%}
+    .modal h3{font-size:1.1rem;margin-bottom:12px}
+    .modal p{color:#aaa;font-size:0.9rem;margin-bottom:20px}
+    .modal input{width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:#fff;font-family:'Tajawal',sans-serif;font-size:0.9rem;margin-bottom:16px;outline:none}
+    .modal input:focus{border-color:var(--accent)}
+    .modal-btns{display:flex;gap:10px;justify-content:flex-end}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid var(--border);border-radius:12px;padding:12px 24px;color:#fff;font-size:0.9rem;z-index:1000;opacity:0;transition:opacity 0.3s;pointer-events:none}
+    .toast.show{opacity:1}
+    .empty{text-align:center;color:var(--muted);padding:40px;font-size:0.9rem}
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-icon">🛡️</div>
+    <div>
+      <h2>آمين ماسنجر</h2>
+      <span>لوحة الإدارة</span>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-label">القائمة الرئيسية</div>
+    <button class="nav-item active" onclick="showPage('dashboard')"><span class="icon">📊</span> الإحصائيات</button>
+    <button class="nav-item" onclick="showPage('users')"><span class="icon">👥</span> إدارة المستخدمين</button>
+    <button class="nav-item" onclick="showPage('conversations')"><span class="icon">💬</span> المحادثات</button>
+    <div class="nav-label">النظام</div>
+    <button class="nav-item" onclick="showPage('logs')"><span class="icon">📋</span> سجلات الأمان</button>
+    <button class="nav-item" onclick="showPage('system')"><span class="icon">⚙️</span> النظام والنسخ</button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="admin-badge">
+      <div class="dot"></div>
+      <div>
+        <div style="font-size:0.85rem;font-weight:700;color:#fff">المدير العام</div>
+        <div style="font-size:0.75rem;color:#666">جلسة آمنة — 2 ساعة</div>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="logout()">🚪 تسجيل الخروج</button>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main">
+  <div class="topbar">
+    <h1 id="pageTitle">📊 الإحصائيات</h1>
+    <div class="topbar-right">
+      <div class="online-pill"><div style="width:7px;height:7px;background:#22c55e;border-radius:50%"></div><span id="onlineCount">0 متصل</span></div>
+      <button class="refresh-btn" onclick="loadAll()">🔄 تحديث</button>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- Dashboard -->
+    <section class="page active" id="page-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card purple"><div class="label">👥 إجمالي المستخدمين</div><div class="value" id="st-users">—</div><div class="sub">مسجّل في المنصة</div></div>
+        <div class="stat-card green"><div class="label">🟢 متصلون الآن</div><div class="value" id="st-online">—</div><div class="sub">مستخدم نشط</div></div>
+        <div class="stat-card red"><div class="label">🚫 محظورون</div><div class="value" id="st-banned">—</div><div class="sub">حساب موقوف</div></div>
+        <div class="stat-card blue"><div class="label">💬 الرسائل</div><div class="value" id="st-msgs">—</div><div class="sub">إجمالي الرسائل</div></div>
+        <div class="stat-card"><div class="label">🗂️ المحادثات</div><div class="value" id="st-convs">—</div><div class="sub">دردشات ومجموعات</div></div>
+        <div class="stat-card"><div class="label">⏱️ وقت التشغيل</div><div class="value" id="st-uptime">—</div><div class="sub">منذ آخر إعادة تشغيل</div></div>
+        <div class="stat-card"><div class="label">💾 الذاكرة</div><div class="value" id="st-mem">—</div><div class="sub">ميغابايت RAM</div></div>
+      </div>
+    </section>
+
+    <!-- Users -->
+    <section class="page" id="page-users">
+      <div class="section">
+        <div class="section-header">
+          <h3>👥 جميع المستخدمين</h3>
+          <input class="search-bar" type="text" placeholder="🔍 ابحث باسم المستخدم..." id="userSearch" oninput="filterUsers()">
+        </div>
+        <div id="usersTable"><div class="empty">⏳ جاري التحميل...</div></div>
+      </div>
+    </section>
+
+    <!-- Conversations -->
+    <section class="page" id="page-conversations">
+      <div class="section">
+        <div class="section-header">
+          <h3>💬 جميع المحادثات</h3>
+          <input class="search-bar" type="text" placeholder="🔍 ابحث..." id="convSearch" oninput="filterConvs()">
+        </div>
+        <div id="convsTable"><div class="empty">⏳ جاري التحميل...</div></div>
+      </div>
+    </section>
+
+    <!-- Logs -->
+    <section class="page" id="page-logs">
+      <div class="section">
+        <div class="section-header"><h3>📋 سجلات الأمان</h3><button class="refresh-btn" onclick="loadLogs()">🔄 تحديث</button></div>
+        <div style="padding:16px">
+          <div class="log-filter" id="logFilters">
+            <button class="filter-badge active" onclick="filterLog('ALL')">الكل</button>
+            <button class="filter-badge" onclick="filterLog('FAIL')">🔴 فشل تسجيل</button>
+            <button class="filter-badge" onclick="filterLog('BAN')">🟡 حظر</button>
+            <button class="filter-badge" onclick="filterLog('ADMIN')">🟣 أدمن</button>
+            <button class="filter-badge" onclick="filterLog('BACKUP')">💾 نسخ</button>
+          </div>
+          <div class="logs-area" id="logsArea"><div class="empty">اختر فلتراً أو انقر تحديث</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- System -->
+    <section class="page" id="page-system">
+      <div class="section">
+        <div class="section-header"><h3>⚙️ معلومات النظام</h3></div>
+        <div style="padding:20px">
+          <div class="info-row"><span class="key">حالة السيرفر</span><span class="val">🟢 يعمل</span></div>
+          <div class="info-row"><span class="key">وقت التشغيل</span><span class="val" id="sys-uptime">—</span></div>
+          <div class="info-row"><span class="key">استهلاك الذاكرة</span><span class="val" id="sys-mem">—</span></div>
+          <div class="info-row"><span class="key">المستخدمون المتصلون</span><span class="val" id="sys-online">—</span></div>
+          <div class="info-row"><span class="key">نوع قاعدة البيانات</span><span class="val">SQLite (better-sqlite3)</span></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h3>💾 النسخ الاحتياطية</h3></div>
+        <div style="padding:20px">
+          <p style="color:#aaa;font-size:0.9rem;margin-bottom:16px">النسخ الاحتياطية تُنفَّذ تلقائياً كل 6 ساعات. يمكنك تشغيل نسخة فورية هنا.</p>
+          <button class="btn btn-backup" onclick="doBackup()">💾 تشغيل نسخ احتياطي الآن</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- Ban Modal -->
+<div class="modal-overlay" id="banModal">
+  <div class="modal">
+    <h3>🚫 حظر المستخدم</h3>
+    <p>أدخل سبب الحظر (اختياري). سيُطرد المستخدم فوراً من جميع الأجهزة.</p>
+    <input type="text" id="banReason" placeholder="سبب الحظر...">
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()" style="background:rgba(255,255,255,0.08);color:#fff;border:none">إلغاء</button>
+      <button class="btn btn-ban" onclick="confirmBan()">🚫 تأكيد الحظر</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = localStorage.getItem('admin_token');
+if (!TOKEN) window.location.href = '/admin/';
+
+let allUsers = [], allConvs = [], allLogs = [], banTargetId = null, activeLogFilter = 'ALL';
+
+const pageTitles = {
+  dashboard: '📊 الإحصائيات',
+  users: '👥 إدارة المستخدمين',
+  conversations: '💬 المحادثات',
+  logs: '📋 سجلات الأمان',
+  system: '⚙️ النظام والنسخ'
+};
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...(opts.headers || {}) }
+  });
+  if (res.status === 401) { localStorage.removeItem('admin_token'); window.location.href = '/admin/'; }
+  return res;
+}
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b => {
+    if (b.getAttribute('onclick')?.includes(name)) b.classList.add('active');
+  });
+  document.getElementById('pageTitle').textContent = pageTitles[name];
+  if (name === 'users' && allUsers.length === 0) loadUsers();
+  if (name === 'conversations' && allConvs.length === 0) loadConvs();
+  if (name === 'logs') loadLogs();
+  if (name === 'system') loadStats();
+}
+
+async function loadAll() { await Promise.all([loadStats(), loadUsers(), loadConvs()]); toast('✅ تم التحديث'); }
+
+async function loadStats() {
+  try {
+    const res = await api('/api/admin/stats');
+    const s = await res.json();
+    const fmt = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : n;
+    document.getElementById('st-users').textContent = fmt(s.total_users || 0);
+    document.getElementById('st-online').textContent = s.onlineUsers || 0;
+    document.getElementById('st-banned').textContent = s.banned_users || 0;
+    document.getElementById('st-msgs').textContent = fmt(s.total_messages || 0);
+    document.getElementById('st-convs').textContent = fmt(s.total_conversations || 0);
+    const u = s.uptime || 0;
+    document.getElementById('st-uptime').textContent = u < 60 ? u+'ث' : u < 3600 ? Math.floor(u/60)+'د' : Math.floor(u/3600)+'س';
+    document.getElementById('st-mem').textContent = s.memoryMB || 0;
+    document.getElementById('onlineCount').textContent = (s.onlineUsers || 0) + ' متصل';
+    document.getElementById('sys-uptime').textContent = document.getElementById('st-uptime').textContent;
+    document.getElementById('sys-mem').textContent = (s.memoryMB || 0) + ' MB';
+    document.getElementById('sys-online').textContent = s.onlineUsers || 0;
+  } catch {}
+}
+
+async function loadUsers() {
+  try {
+    const res = await api('/api/admin/users');
+    allUsers = await res.json();
+    renderUsers(allUsers);
+  } catch { document.getElementById('usersTable').innerHTML = '<div class="empty">❌ خطأ في التحميل</div>'; }
+}
+
+function renderUsers(users) {
+  if (!users.length) { document.getElementById('usersTable').innerHTML = '<div class="empty">لا يوجد مستخدمون</div>'; return; }
+  const rows = users.map(u => `
+    <tr>
+      <td><img class="avatar" src="${u.avatar}" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${u.username}'" alt=""></td>
+      <td><strong>${u.displayName}</strong><br><span style="color:#666;font-size:0.75rem">@${u.username}</span></td>
+      <td><span class="badge ${u.isOnline ? 'online' : 'offline'}">${u.isOnline ? '🟢 متصل' : '⚫ غير متصل'}</span></td>
+      <td>${u.messageCount || 0}</td>
+      <td><span class="badge ${u.banned ? 'banned' : ''}">${u.banned ? '🚫 محظور' : '✅ نشط'}</span></td>
+      <td style="font-size:0.75rem;color:#666">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('ar') : '—'}</td>
+      <td><div class="actions">
+        ${u.banned
+          ? `<button class="btn btn-unban" onclick="unbanUser('${u.id}')">✅ رفع الحظر</button>`
+          : `<button class="btn btn-ban" onclick="openBan('${u.id}')">🚫 حظر</button>`}
+        <button class="btn btn-kick" onclick="forceLogout('${u.id}')">⚡ طرد</button>
+        <button class="btn btn-del" onclick="deleteUser('${u.id}','${u.username}')">🗑</button>
+      </div></td>
+    </tr>`).join('');
+  document.getElementById('usersTable').innerHTML = `
+    <table>
+      <thead><tr><th></th><th>المستخدم</th><th>الحالة</th><th>الرسائل</th><th>الحساب</th><th>تاريخ الإنشاء</th><th>الإجراءات</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function filterUsers() {
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  renderUsers(allUsers.filter(u => u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)));
+}
+
+async function loadConvs() {
+  try {
+    const res = await api('/api/admin/conversations');
+    allConvs = await res.json();
+    renderConvs(allConvs);
+  } catch { document.getElementById('convsTable').innerHTML = '<div class="empty">❌ خطأ في التحميل</div>'; }
+}
+
+function renderConvs(convs) {
+  if (!convs.length) { document.getElementById('convsTable').innerHTML = '<div class="empty">لا توجد محادثات</div>'; return; }
+  const rows = convs.map(c => `
+    <tr>
+      <td><span class="badge ${c.type}">${c.type === 'direct' ? '💬 خاصة' : '👥 مجموعة'}</span></td>
+      <td>${c.name || '—'}</td>
+      <td>${c.memberCount || 0}</td>
+      <td>${c.messageCount || 0}</td>
+      <td style="font-size:0.75rem;color:#666">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('ar') : '—'}</td>
+      <td><button class="btn btn-del" onclick="deleteConv('${c.id}')">🗑 حذف</button></td>
+    </tr>`).join('');
+  document.getElementById('convsTable').innerHTML = `
+    <table>
+      <thead><tr><th>النوع</th><th>الاسم</th><th>الأعضاء</th><th>الرسائل</th><th>تاريخ الإنشاء</th><th>إجراء</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function filterConvs() {
+  const q = document.getElementById('convSearch').value.toLowerCase();
+  renderConvs(allConvs.filter(c => (c.name || '').toLowerCase().includes(q)));
+}
+
+async function loadLogs() {
+  try {
+    const res = await api('/api/admin/logs');
+    const data = await res.json();
+    allLogs = data.logs || [];
+    applyLogFilter();
+  } catch {}
+}
+
+function filterLog(type) {
+  activeLogFilter = type;
+  document.querySelectorAll('.filter-badge').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('onclick')?.includes(type));
+  });
+  applyLogFilter();
+}
+
+function applyLogFilter() {
+  const filtered = activeLogFilter === 'ALL' ? allLogs : allLogs.filter(l => l.includes(activeLogFilter));
+  const area = document.getElementById('logsArea');
+  if (!filtered.length) { area.innerHTML = '<div class="empty">لا توجد سجلات</div>'; return; }
+  area.innerHTML = filtered.map(line => {
+    let cls = 'default';
+    if (line.includes('FAIL') || line.includes('UNAUTH')) cls = 'FAIL';
+    else if (line.includes('BAN')) cls = 'BAN';
+    else if (line.includes('OK')) cls = 'OK';
+    else if (line.includes('ADMIN')) cls = 'ADMIN';
+    else if (line.includes('BACKUP')) cls = 'BACKUP_OK';
+    return `<div class="log-line ${cls}">${line}</div>`;
+  }).join('');
+}
+
+// Actions
+function openBan(id) { banTargetId = id; document.getElementById('banReason').value = ''; document.getElementById('banModal').classList.add('show'); }
+function closeModal() { document.getElementById('banModal').classList.remove('show'); banTargetId = null; }
+
+async function confirmBan() {
+  if (!banTargetId) return;
+  const reason = document.getElementById('banReason').value;
+  await api(`/api/admin/users/${banTargetId}/ban`, { method: 'POST', body: JSON.stringify({ reason }) });
+  closeModal(); await loadUsers(); toast('🚫 تم حظر المستخدم');
+}
+
+async function unbanUser(id) {
+  await api(`/api/admin/users/${id}/unban`, { method: 'POST' });
+  await loadUsers(); toast('✅ تم رفع الحظر');
+}
+
+async function forceLogout(id) {
+  await api(`/api/admin/users/${id}/force-logout`, { method: 'POST' });
+  await loadUsers(); toast('⚡ تم طرد المستخدم');
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`⚠️ هل تريد حذف حساب @${name} نهائياً؟ لا يمكن التراجع!`)) return;
+  await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+  await loadUsers(); toast('🗑️ تم حذف الحساب');
+}
+
+async function deleteConv(id) {
+  if (!confirm('⚠️ هل تريد حذف هذه المحادثة ورسائلها؟')) return;
+  await api(`/api/admin/conversations/${id}`, { method: 'DELETE' });
+  await loadConvs(); toast('🗑️ تم حذف المحادثة');
+}
+
+async function doBackup() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳ جاري النسخ...';
+  await api('/api/admin/backup', { method: 'POST' });
+  btn.disabled = false; btn.textContent = '💾 تشغيل نسخ احتياطي الآن';
+  toast('✅ تم بدء النسخة الاحتياطية بنجاح');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function logout() {
+  if (confirm('هل تريد تسجيل الخروج؟')) {
+    localStorage.removeItem('admin_token');
+    window.location.href = '/admin/';
+  }
+}
+
+// Init
+loadStats();
+setInterval(loadStats, 30000); // Auto-refresh stats every 30s
+</script>
+</body>
+</html>

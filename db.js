@@ -79,6 +79,9 @@ db.exec(`
 // Add 2FA columns if they don't exist (safe ALTER TABLE)
 try { db.exec(`ALTER TABLE users ADD COLUMN totp_secret TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN ban_reason TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN last_seen INTEGER`); } catch {}
 
 // ── User Queries ─────────────────────────────────────────────────
 const userQueries = {
@@ -358,6 +361,85 @@ const deleteUserAccount = db.transaction((userId) => {
   deleteQueries.delUser.run(userId);
 });
 
+// ── Admin Queries ─────────────────────────────────────────────────
+const adminQueries = {
+  getAllUsers: db.prepare(`
+    SELECT u.*, 
+      (SELECT COUNT(*) FROM messages WHERE sender_id = u.id) as message_count,
+      (SELECT COUNT(*) FROM conversation_members WHERE user_id = u.id) as conv_count
+    FROM users u ORDER BY u.created_at DESC
+  `),
+  banUser:       db.prepare(`UPDATE users SET banned = 1, ban_reason = ? WHERE id = ?`),
+  unbanUser:     db.prepare(`UPDATE users SET banned = 0, ban_reason = NULL WHERE id = ?`),
+  updateLastSeen:db.prepare(`UPDATE users SET last_seen = ? WHERE id = ?`),
+  getAllConvs:   db.prepare(`
+    SELECT c.*,
+      (SELECT COUNT(*) FROM conversation_members WHERE conv_id = c.id) as member_count,
+      (SELECT COUNT(*) FROM messages WHERE conv_id = c.id) as message_count
+    FROM conversations c ORDER BY c.created_at DESC
+  `),
+  deleteConv:    db.prepare(`DELETE FROM conversations WHERE id = ?`),
+  deleteConvMsg: db.prepare(`DELETE FROM messages WHERE conv_id = ?`),
+  deleteConvMem: db.prepare(`DELETE FROM conversation_members WHERE conv_id = ?`),
+  stats: db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM users) as total_users,
+      (SELECT COUNT(*) FROM users WHERE banned = 1) as banned_users,
+      (SELECT COUNT(*) FROM messages) as total_messages,
+      (SELECT COUNT(*) FROM conversations) as total_conversations,
+      (SELECT COUNT(*) FROM conversation_members) as total_memberships
+  `)
+};
+
+function getAllUsers() {
+  return adminQueries.getAllUsers.all().map(row => ({
+    ...mapUser(row),
+    messageCount: row.message_count,
+    convCount: row.conv_count,
+    banned: !!row.banned,
+    banReason: row.ban_reason || null,
+    lastSeen: row.last_seen || null
+  }));
+}
+
+function banUser(userId, reason) {
+  adminQueries.banUser.run(reason || 'لا يوجد سبب محدد', userId);
+}
+
+function unbanUser(userId) {
+  adminQueries.unbanUser.run(userId);
+}
+
+function updateLastSeen(userId) {
+  adminQueries.updateLastSeen.run(Date.now(), userId);
+}
+
+function isUserBanned(userId) {
+  const u = userQueries.findById.get(userId);
+  return u ? !!u.banned : false;
+}
+
+function getAllConversations() {
+  return adminQueries.getAllConvs.all().map(row => ({
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    createdAt: row.created_at,
+    memberCount: row.member_count,
+    messageCount: row.message_count
+  }));
+}
+
+const deleteConversationById = db.transaction((convId) => {
+  adminQueries.deleteConvMsg.run(convId);
+  adminQueries.deleteConvMem.run(convId);
+  adminQueries.deleteConv.run(convId);
+});
+
+function getStats() {
+  return adminQueries.stats.get();
+}
+
 module.exports = {
   createUser, getUserByUsername, getUserById, searchUsers,
   findDirectConv, createConversation, addConvMember, removeConvMember,
@@ -365,5 +447,7 @@ module.exports = {
   getGroupInfo, insertMessage, getMessages, updateMessageStatus, safeUser,
   saveRefreshToken, getRefreshToken, revokeRefreshToken, revokeAllUserTokens, cleanExpiredTokens,
   setTotpSecret, enableTotp, disableTotp,
-  deleteUserAccount
+  deleteUserAccount,
+  getAllUsers, banUser, unbanUser, updateLastSeen, isUserBanned,
+  getAllConversations, deleteConversationById, getStats
 };

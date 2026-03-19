@@ -612,11 +612,131 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.userId;
+    // Check if user is banned
+    if (db.isUserBanned(req.userId)) {
+      secLog('BANNED_ACCESS', { userId: req.userId, ip: req.ip });
+      return res.status(403).json({ error: 'تم حظر حسابك. تواصل مع الإدارة.' });
+    }
+    // Update last seen
+    db.updateLastSeen(req.userId);
     next();
   } catch {
     res.status(401).json({ error: 'رمز غير صالح' });
   }
 }
+
+// ── Admin Auth Middleware ──────────────────────────────────────────
+const ADMIN_JWT_SECRET = (process.env.ADMIN_PASSWORD || 'admin_secret') + '_jwt';
+
+function adminAuthMiddleware(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'غير مصرح للأدمن' });
+  try {
+    const decoded = jwt.verify(token, ADMIN_JWT_SECRET);
+    if (decoded.role !== 'admin') throw new Error();
+    next();
+  } catch {
+    secLog('ADMIN_UNAUTH', { ip: req.ip });
+    res.status(401).json({ error: 'صلاحيات الأدمن غير صحيحة' });
+  }
+}
+
+// ── Admin Routes ─────────────────────────────────────────────────
+const adminLimiter = rateLimit({ windowMs: 60 * 1000, max: 30 });
+
+app.post('/api/admin/login', adminLimiter, (req, res) => {
+  const { password } = req.body;
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+  if (!ADMIN_PASSWORD) return res.status(503).json({ error: 'لم يتم ضبط ADMIN_PASSWORD في المتغيرات' });
+  if (password !== ADMIN_PASSWORD) {
+    secLog('ADMIN_LOGIN_FAIL', { ip: req.ip });
+    return res.status(401).json({ error: 'كلمة مرور الأدمن غير صحيحة' });
+  }
+  const token = jwt.sign({ role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: '2h' });
+  secLog('ADMIN_LOGIN', { ip: req.ip });
+  res.json({ token });
+});
+
+app.get('/api/admin/stats', adminAuthMiddleware, (req, res) => {
+  const stats = db.getStats();
+  const mem = process.memoryUsage();
+  res.json({
+    ...stats,
+    onlineUsers: onlineUsers.size,
+    uptime: Math.floor(process.uptime()),
+    memoryMB: Math.round(mem.rss / 1024 / 1024)
+  });
+});
+
+app.get('/api/admin/users', adminAuthMiddleware, (req, res) => {
+  const users = db.getAllUsers().map(u => ({
+    ...u,
+    isOnline: onlineUsers.has(u.id)
+  }));
+  res.json(users);
+});
+
+app.post('/api/admin/users/:id/ban', adminAuthMiddleware, (req, res) => {
+  const { reason } = req.body;
+  db.banUser(req.params.id, reason);
+  // Force logout
+  const sid = onlineUsers.get(req.params.id);
+  if (sid) io.to(sid).emit('force:logout', { reason: 'banned' });
+  onlineUsers.delete(req.params.id);
+  db.revokeAllUserTokens(req.params.id);
+  secLog('ADMIN_BAN', { targetId: req.params.id, reason, ip: req.ip });
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/users/:id/unban', adminAuthMiddleware, (req, res) => {
+  db.unbanUser(req.params.id);
+  secLog('ADMIN_UNBAN', { targetId: req.params.id, ip: req.ip });
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/users/:id/force-logout', adminAuthMiddleware, (req, res) => {
+  const sid = onlineUsers.get(req.params.id);
+  if (sid) io.to(sid).emit('force:logout', { reason: 'admin_action' });
+  onlineUsers.delete(req.params.id);
+  db.revokeAllUserTokens(req.params.id);
+  secLog('ADMIN_FORCE_LOGOUT', { targetId: req.params.id, ip: req.ip });
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', adminAuthMiddleware, (req, res) => {
+  const sid = onlineUsers.get(req.params.id);
+  if (sid) io.to(sid).emit('force:logout', { reason: 'account_deleted' });
+  onlineUsers.delete(req.params.id);
+  db.deleteUserAccount(req.params.id);
+  secLog('ADMIN_DELETE_USER', { targetId: req.params.id, ip: req.ip });
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/conversations', adminAuthMiddleware, (req, res) => {
+  res.json(db.getAllConversations());
+});
+
+app.delete('/api/admin/conversations/:id', adminAuthMiddleware, (req, res) => {
+  db.deleteConversationById(req.params.id);
+  secLog('ADMIN_DELETE_CONV', { convId: req.params.id, ip: req.ip });
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/logs', adminAuthMiddleware, (req, res) => {
+  try {
+    if (!fs.existsSync(LOG_FILE)) return res.json({ logs: [] });
+    const raw = fs.readFileSync(LOG_FILE, 'utf8');
+    const lines = raw.trim().split('\n').filter(Boolean).reverse().slice(0, 500);
+    res.json({ logs: lines });
+  } catch {
+    res.status(500).json({ error: 'خطأ في قراءة السجلات' });
+  }
+});
+
+app.post('/api/admin/backup', adminAuthMiddleware, (req, res) => {
+  runBackup();
+  res.json({ ok: true, message: 'تم بدء النسخة الاحتياطية' });
+});
 
 server.listen(PORT, () => {
   console.log(`🔐 Ameen Messenger running on http://localhost:${PORT}`);
