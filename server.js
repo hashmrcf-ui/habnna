@@ -562,49 +562,33 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ── WebRTC Call Signaling ──
-  socket.on('call:offer', ({ targetUserId, offer, callType }) => {
+  // ── LiveKit Call Signaling ──
+  socket.on('call:offer', ({ targetUserId, callType, roomName }) => {
     const targetSocketId = onlineUsers.get(targetUserId);
     if (!targetSocketId) {
       socket.emit('call:error', { message: 'المستخدم غير متصل' });
       return;
     }
     const caller = db.getUserById(userId);
+    // Log call attempt
+    secLog('CALL_INVITE', { from: userId, to: targetUserId, type: callType, room: roomName });
     io.to(targetSocketId).emit('call:incoming', {
       callerId: userId,
       callerName: caller?.displayName,
       callerAvatar: caller?.avatar,
-      offer,
-      callType // 'audio' | 'video'
+      callType,
+      roomName   // ← LiveKit room to join
     });
-  });
-
-  socket.on('call:answer', ({ callerId, answer }) => {
-    const callerSocketId = onlineUsers.get(callerId);
-    if (callerSocketId) {
-      io.to(callerSocketId).emit('call:answered', { answer });
-    }
-  });
-
-  socket.on('call:ice-candidate', ({ targetUserId, candidate }) => {
-    const targetSocketId = onlineUsers.get(targetUserId);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('call:ice-candidate', { candidate });
-    }
   });
 
   socket.on('call:reject', ({ callerId }) => {
     const callerSocketId = onlineUsers.get(callerId);
-    if (callerSocketId) {
-      io.to(callerSocketId).emit('call:rejected', { rejectedBy: userId });
-    }
+    if (callerSocketId) io.to(callerSocketId).emit('call:rejected', { rejectedBy: userId });
   });
 
   socket.on('call:end', ({ targetUserId }) => {
     const targetSocketId = onlineUsers.get(targetUserId);
-    if (targetSocketId) {
-      io.to(targetSocketId).emit('call:ended', { endedBy: userId });
-    }
+    if (targetSocketId) io.to(targetSocketId).emit('call:ended', { endedBy: userId });
   });
 
   socket.on('disconnect', () => {
