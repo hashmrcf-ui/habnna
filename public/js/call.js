@@ -92,15 +92,31 @@ const AmeenCall = (() => {
     });
 
     // Handle remote tracks
-    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    const attachTrack = (track) => {
       if (track.kind === LivekitClient.Track.Kind.Video) {
         const el = document.getElementById('call-remote-video');
-        if (el) track.attach(el);
+        if (el) {
+          el.srcObject = new MediaStream([track.mediaStreamTrack]);
+          el.play().catch(() => {});
+        }
       } else if (track.kind === LivekitClient.Track.Kind.Audio) {
         const el = document.getElementById('call-remote-audio');
-        if (el) track.attach(el);
-        else track.attach(); // auto-attach to new audio element
+        if (el) {
+          el.srcObject = new MediaStream([track.mediaStreamTrack]);
+          el.play().catch(() => {});
+        } else {
+          track.attach();
+        }
       }
+    };
+
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => attachTrack(track));
+
+    // In case remote participant is already in the room
+    room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+      participant.tracks.forEach(pub => {
+        if (pub.track) attachTrack(pub.track);
+      });
     });
 
     room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => {
@@ -124,7 +140,12 @@ const AmeenCall = (() => {
       await room.localParticipant.publishTrack(track);
       if (track.kind === LivekitClient.Track.Kind.Video) {
         const el = document.getElementById('call-local-video');
-        if (el) track.attach(el);
+        if (el) {
+          // Use MediaStream so the browser can render the local preview
+          el.srcObject = new MediaStream([track.mediaStreamTrack]);
+          el.muted = true;
+          el.play().catch(() => {});
+        }
       }
     }
   }
