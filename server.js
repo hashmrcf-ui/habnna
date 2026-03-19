@@ -89,12 +89,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:    ["'self'"],
-      scriptSrc:     ["'self'", "'unsafe-inline'", 'https://cdn.socket.io', 'https://unpkg.com'],
+      scriptSrc:     ["'self'", "'unsafe-inline'", 'https://cdn.socket.io', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
       scriptSrcAttr: ["'unsafe-inline'"],   // Allow onclick, onsubmit, etc.
       styleSrc:      ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:       ["'self'", 'https://fonts.gstatic.com'],
       imgSrc:        ["'self'", 'data:', 'https://api.dicebear.com'],
-      connectSrc:    ["'self'", 'wss:', 'ws:'],
+      connectSrc: ["'self'", 'wss:', 'ws:', 'https://amyn-8tdg1s2l.livekit.cloud'],
       mediaSrc:      ["'self'", 'blob:'],
     }
   },
