@@ -35,6 +35,49 @@ async function init() {
 
   // Load conversations
   loadConversations();
+
+  // Register service worker & enable push
+  registerPush();
+}
+
+// ── Push Notifications ────────────────────────────────────────
+async function registerPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+
+    // Get VAPID public key
+    const res = await fetch('/api/push/vapid-public-key');
+    const { key } = await res.json();
+
+    // Check existing subscription
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') return;
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key)
+      });
+    }
+
+    // Send subscription to server
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+      body: JSON.stringify(sub)
+    });
+    console.log('🔔 Push notifications enabled');
+  } catch (e) {
+    console.warn('Push registration failed:', e);
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
 }
 
 // ── Socket Listeners ──────────────────────────────────────────

@@ -7,6 +7,7 @@ const { randomUUID: uuidv4 } = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const webpush = require('web-push');
 const db = require('./db');
 
 // ── File Upload Config ────────────────────────────────────────────
@@ -187,6 +188,44 @@ app.get('/api/files/:filename', authMiddleware, (req, res) => {
 // Serve uploads from public when running locally
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
+// ── Web Push / Push Notifications ────────────────────────────────
+const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY  || 'BBDxpN94WcxUIR8RyFlgBUKMjMdvHDbibG7V7-AwLRAGJRG58CBDkR_nJeUkFsNELRs-0htGItr7gWYxac03Oxo';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || 'Ap-CspK1scGRA61X7FerQvDDyoVVLFCeu-UDHUFBNcM';
+
+webpush.setVapidDetails('mailto:ameen@messenger.app', VAPID_PUBLIC, VAPID_PRIVATE);
+
+// userId -> Set of push subscriptions
+const pushSubs = new Map();
+
+app.get('/api/push/vapid-public-key', (req, res) => {
+  res.json({ key: VAPID_PUBLIC });
+});
+
+app.post('/api/push/subscribe', authMiddleware, (req, res) => {
+  const sub = req.body;
+  if (!sub?.endpoint) return res.status(400).json({ error: 'invalid subscription' });
+  const subs = pushSubs.get(req.userId) || new Set();
+  subs.add(JSON.stringify(sub));
+  pushSubs.set(req.userId, subs);
+  res.json({ ok: true });
+});
+
+app.delete('/api/push/unsubscribe', authMiddleware, (req, res) => {
+  pushSubs.delete(req.userId);
+  res.json({ ok: true });
+});
+
+async function sendPushToUser(userId, payload) {
+  const subs = pushSubs.get(userId);
+  if (!subs || subs.size === 0) return;
+  for (const subStr of subs) {
+    try {
+      await webpush.sendNotification(JSON.parse(subStr), JSON.stringify(payload));
+    } catch (e) {
+      if (e.statusCode === 410 || e.statusCode === 404) subs.delete(subStr);
+    }
+  }
+}
 
 // ── Socket.io ────────────────────────────────────────────────────
 io.use((socket, next) => {
@@ -229,6 +268,24 @@ io.on('connection', (socket) => {
 
     db.insertMessage(msg);
     io.to(convId).emit('message:new', msg);
+
+    // Send push to offline members
+    const sender = db.getUserById(userId);
+    const senderName = sender?.displayName || 'رسالة جديدة';
+    const preview = type === 'image' ? '📷 صورة'
+      : type === 'file' ? '📎 ملف'
+      : content.length > 60 ? content.substring(0, 60) + '…' : content;
+    for (const memberId of members) {
+      if (memberId !== userId && !onlineUsers.has(memberId)) {
+        sendPushToUser(memberId, {
+          title: senderName,
+          body: preview,
+          url: '/app.html',
+          convId,
+          tag: `msg-${convId}`
+        }).catch(() => {});
+      }
+    }
   });
 
   // ── Typing ──
