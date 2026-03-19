@@ -522,22 +522,31 @@ async function handleFileSelected(event) {
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) return showToast('❌ الملف أكبر من 10MB');
 
-  showToast('⏫ جارٍ رفع الملف...');
+  // Show image preview immediately (optimistic UI)
+  if (isImage) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      appendMessage({
+        id: 'preview-' + Date.now(),
+        senderId: ME.id,
+        type: 'image',
+        content: e.target.result,
+        timestamp: Date.now(),
+        _preview: true
+      });
+      scrollToBottom();
+    };
+    reader.readAsDataURL(file);
+  }
 
+  // Upload with progress tracking via XHR
   try {
-    const formData = new FormData();
-    formData.append('file', file);
+    const data = await uploadWithProgress(file);
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${TOKEN}` },
-      body: formData
-    });
+    // Remove preview bubble and send real message
+    const preview = document.querySelector('[data-preview]');
+    if (preview) preview.closest('.msg-group')?.remove();
 
-    if (!res.ok) throw new Error('فشل الرفع');
-    const data = await res.json();
-
-    // Send as message via socket
     socket.emit('message:send', {
       convId: activeConvId,
       content: isImage ? data.url : JSON.stringify({ url: data.url, name: data.name, size: data.size }),
@@ -546,8 +555,46 @@ async function handleFileSelected(event) {
 
     showToast(`✅ تم إرسال: ${file.name}`);
   } catch (e) {
+    // Remove broken preview
+    document.querySelectorAll('[data-preview]').forEach(el => el.closest('.msg-group')?.remove());
     showToast('❌ فشل رفع الملف');
   }
+}
+
+function uploadWithProgress(file) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Show progress toast
+    const toastEl = document.getElementById('toast');
+    toastEl.classList.add('show');
+    toastEl.textContent = '⏫ 0%';
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 100);
+        toastEl.textContent = `⏫ ${pct}%`;
+      }
+    };
+
+    xhr.onload = () => {
+      toastEl.classList.remove('show');
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch { reject(new Error('invalid response')); }
+      } else {
+        reject(new Error('upload failed: ' + xhr.status));
+      }
+    };
+
+    xhr.onerror = () => { toastEl.classList.remove('show'); reject(new Error('network error')); };
+
+    xhr.open('POST', '/api/upload');
+    xhr.setRequestHeader('Authorization', `Bearer ${currentToken}`);
+    xhr.send(formData);
+  });
 }
 
 // ── Typing Indicator ──────────────────────────────────────────

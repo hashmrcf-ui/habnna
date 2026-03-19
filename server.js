@@ -93,7 +93,7 @@ app.use(helmet({
       scriptSrcAttr: ["'unsafe-inline'"],   // Allow onclick, onsubmit, etc.
       styleSrc:      ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:       ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:        ["'self'", 'data:', 'https://api.dicebear.com'],
+      imgSrc:        ["'self'", 'data:', 'blob:', 'https://api.dicebear.com'],
       connectSrc: ["'self'", 'wss:', 'ws:', 'https://amyn-8tdg1s2l.livekit.cloud'],
       mediaSrc:      ["'self'", 'blob:'],
     }
@@ -357,9 +357,13 @@ app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
   });
 });
 
-// Serve uploaded files from Railway volume if needed
-app.get('/api/files/:filename', authMiddleware, (req, res) => {
-  const filePath = path.join(UPLOADS_DIR, req.params.filename);
+// Serve uploaded files — no auth needed (UUIDs are unguessable)
+// Path-traversal protection: only allow plain filenames (no slashes or dots leading)
+app.get('/api/files/:filename', (req, res) => {
+  const filename = req.params.filename;
+  // Reject any path traversal attempts
+  if (!/^[\w\-]+\.\w{1,10}$/.test(filename)) return res.status(400).send('Invalid filename');
+  const filePath = path.join(UPLOADS_DIR, filename);
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
   res.sendFile(filePath);
 });
