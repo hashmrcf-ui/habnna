@@ -609,20 +609,23 @@ io.on('connection', (socket) => {
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'غير مصادق' });
+  let userId;
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.userId;
-    // Check if user is banned
-    if (db.isUserBanned(req.userId)) {
-      secLog('BANNED_ACCESS', { userId: req.userId, ip: req.ip });
+    userId = decoded.userId;
+  } catch {
+    return res.status(401).json({ error: 'رمز غير صالح' });
+  }
+  // DB checks outside JWT try-catch so DB errors don't cause false 401s
+  try {
+    if (db.isUserBanned(userId)) {
+      secLog('BANNED_ACCESS', { userId, ip: req.ip });
       return res.status(403).json({ error: 'تم حظر حسابك. تواصل مع الإدارة.' });
     }
-    // Update last seen
-    db.updateLastSeen(req.userId);
-    next();
-  } catch {
-    res.status(401).json({ error: 'رمز غير صالح' });
-  }
+    db.updateLastSeen(userId);
+  } catch { /* ignore DB errors silently */ }
+  req.userId = userId;
+  next();
 }
 
 // ── Admin Auth Middleware ──────────────────────────────────────────
