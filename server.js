@@ -14,9 +14,9 @@ const db = require('./db');
 
 // ── LiveKit SFU ──────────────────────────────────────────────────
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
-const LK_URL    = process.env.LIVEKIT_URL    || '';
-const LK_KEY    = process.env.LIVEKIT_API_KEY    || '';
-const LK_SECRET = process.env.LIVEKIT_API_SECRET || '';
+const LK_URL    = (process.env.LIVEKIT_URL || '').trim();
+const LK_KEY    = (process.env.LIVEKIT_API_KEY || '').trim();
+const LK_SECRET = (process.env.LIVEKIT_API_SECRET || '').trim();
 const lkRoom    = LK_KEY ? new RoomServiceClient(LK_URL, LK_KEY, LK_SECRET) : null;
 
 // ── Security Logging ────────────────────────────────────────────
