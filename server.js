@@ -8,7 +8,20 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const webpush = require('web-push');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const db = require('./db');
+
+// ── Security Logging ────────────────────────────────────────────
+const LOG_FILE = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'security.log')
+  : path.join(__dirname, 'security.log');
+
+function secLog(event, data) {
+  const entry = `[${new Date().toISOString()}] ${event} ${JSON.stringify(data)}\n`;
+  try { fs.appendFileSync(LOG_FILE, entry); } catch {}
+  if (process.env.NODE_ENV !== 'production') console.log('[SEC]', event, data);
+}
 
 // ── File Upload Config ────────────────────────────────────────────
 const UPLOADS_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
@@ -25,13 +38,23 @@ const storage = multer.diskStorage({
   }
 });
 
+// File MIME type magic bytes validation
+const ALLOWED_MAGIC = [
+  { mime: 'image/jpeg',   bytes: [0xFF,0xD8,0xFF] },
+  { mime: 'image/png',    bytes: [0x89,0x50,0x4E,0x47] },
+  { mime: 'image/gif',    bytes: [0x47,0x49,0x46] },
+  { mime: 'image/webp',   bytes: [0x52,0x49,0x46,0x46] },
+  { mime: 'application/pdf', bytes: [0x25,0x50,0x44,0x46] },
+];
+
 const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp|pdf|mp4|mp3|doc|docx|zip|txt/;
-    const ok = allowed.test(path.extname(file.originalname).toLowerCase());
-    cb(ok ? null : new Error('نوع الملف غير مدعوم'), ok);
+    const allowed = /^(image\/(jpeg|jpg|png|gif|webp)|application\/pdf|audio\/mpeg|video\/mp4|application\/(zip|msword|vnd\.openxmlformats|octet-stream)|text\/plain)$/;
+    const extOk = /^\.(jpg|jpeg|png|gif|webp|pdf|mp3|mp4|zip|doc|docx|txt)$/i.test(path.extname(file.originalname));
+    if (!extOk) return cb(new Error('نوع الملف غير مدعوم'), false);
+    cb(null, true);
   }
 });
 
@@ -50,38 +73,113 @@ const io = new Server(server, {
 // Online users: userId -> socketId
 const onlineUsers = new Map();
 
-app.use(express.json());
+// ── Security Middleware ─────────────────────────────────────────
+// Helmet — HTTP security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'", 'https://cdn.socket.io'],
+      styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:     ["'self'", 'data:', 'https://api.dicebear.com'],
+      connectSrc: ["'self'", 'wss:', 'ws:'],
+      mediaSrc:   ["'self'", 'blob:'],
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
+
+// ── Rate Limiters ─────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,       // 1 minute
+  max: 5,                    // 5 attempts per minute
+  message: { error: 'محاولات كثيرة جداً. انتظر دقيقة.' },
+  handler: (req, res, next, options) => {
+    secLog('RATE_LIMIT_AUTH', { ip: req.ip, path: req.path });
+    res.status(429).json(options.message);
+  }
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  message: { error: 'تجاوزت حد رفع الملفات. انتظر.' },
+  handler: (req, res, next, options) => {
+    secLog('RATE_LIMIT_UPLOAD', { ip: req.ip, userId: req.userId });
+    res.status(429).json(options.message);
+  }
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: 'طلبات كثيرة. انتظر لحظة.' }
+});
+
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use('/api/', apiLimiter);
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Input Validation Helpers ─────────────────────────────────────
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/;
+const PASSWORD_MIN = 8;
+const MSG_MAX = 4000;
+
+function sanitizeText(s) {
+  return String(s).replace(/[<>]/g, '');
+}
+
 // ── Auth Routes ──────────────────────────────────────────────────
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   const { username, password, displayName } = req.body;
   if (!username || !password || !displayName)
     return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
 
+  if (!USERNAME_RE.test(username))
+    return res.status(400).json({ error: 'اسم المستخدم 3-30 حرفاً (أحرف وأرقام و_)' });
+  if (password.length < PASSWORD_MIN)
+    return res.status(400).json({ error: `كلمة المرور ${PASSWORD_MIN} أحرف على الأقل` });
+
+  const cleanDisplay = sanitizeText(displayName).substring(0, 50).trim();
+  if (!cleanDisplay) return res.status(400).json({ error: 'اسم العرض غير صالح' });
+
   if (db.getUserByUsername(username.toLowerCase()))
     return res.status(409).json({ error: 'اسم المستخدم محجوز' });
 
-  const hashedPw = await bcrypt.hash(password, 10);
+  const hashedPw = await bcrypt.hash(password, 12);
   const userId = uuidv4();
-  const avatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}&backgroundColor=1a1a2e`;
+  const avatar = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(cleanDisplay)}&backgroundColor=1a1a2e`;
 
-  const user = db.createUser({ id: userId, username: username.toLowerCase(), displayName, avatar, hashedPw, status: 'متاح' });
-  const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
+  const user = db.createUser({ id: userId, username: username.toLowerCase(), displayName: cleanDisplay, avatar, hashedPw, status: 'متاح' });
+  const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+  secLog('REGISTER', { userId, username: username.toLowerCase(), ip: req.ip });
   res.json({ token, user: db.safeUser(user) });
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', authLimiter, async (req, res) => {
   const { username, password } = req.body;
-  const user = db.getUserByUsername(username?.toLowerCase());
-  if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+  if (!username || !password)
+    return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
+
+  const user = db.getUserByUsername(username.toLowerCase());
+  if (!user) {
+    secLog('LOGIN_FAIL', { username, ip: req.ip });
+    return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+  }
 
   const valid = await bcrypt.compare(password, user.hashedPw);
-  if (!valid) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+  if (!valid) {
+    secLog('LOGIN_FAIL', { username, ip: req.ip });
+    return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+  }
 
-  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+  secLog('LOGIN_OK', { userId: user.id, ip: req.ip });
   res.json({ token, user: { ...db.safeUser(user), isOnline: true } });
 });
+
 
 app.get('/api/users/search', authMiddleware, (req, res) => {
   const q = (req.query.q || '').trim();
@@ -251,6 +349,11 @@ io.on('connection', (socket) => {
   socket.on('message:send', ({ convId, content, type = 'text', encryptedKey }) => {
     if (!db.isConvMember(convId, userId)) return;
 
+    // Validate message content
+    if (typeof content !== 'string' || !content.trim()) return;
+    if (type === 'text' && content.length > MSG_MAX) return;
+    const safeContent = type === 'text' ? sanitizeText(content).trim() : content;
+
     const members = db.getConversationMembers(convId);
     const anyRecipientOnline = members.some(m => m !== userId && onlineUsers.has(m));
 
@@ -259,7 +362,7 @@ io.on('connection', (socket) => {
       convId,
       senderId: userId,
       senderName: db.getUserById(userId)?.displayName,
-      content,
+      content: safeContent,
       type,
       encryptedKey: encryptedKey || null,
       status: anyRecipientOnline ? 'delivered' : 'sent',
@@ -274,7 +377,7 @@ io.on('connection', (socket) => {
     const senderName = sender?.displayName || 'رسالة جديدة';
     const preview = type === 'image' ? '📷 صورة'
       : type === 'file' ? '📎 ملف'
-      : content.length > 60 ? content.substring(0, 60) + '…' : content;
+      : safeContent.length > 60 ? safeContent.substring(0, 60) + '…' : safeContent;
     for (const memberId of members) {
       if (memberId !== userId && !onlineUsers.has(memberId)) {
         sendPushToUser(memberId, {
