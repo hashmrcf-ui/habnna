@@ -186,14 +186,21 @@ function renderConvList(list) {
     const el = document.createElement('div');
     el.className = `conv-item${conv.id === activeConvId ? ' active' : ''}`;
     el.id = `conv-${conv.id}`;
-    const lastText = conv.lastMessage ? conv.lastMessage.content.substring(0, 40) : 'ابدأ المحادثة';
+
+    let lastText = 'ابدأ المحادثة';
+    if (conv.lastMessage) {
+      const t = conv.lastMessage.type;
+      lastText = t === 'image' ? '📷 صورة'
+        : t === 'file' ? '📎 ملف'
+        : conv.lastMessage.content.substring(0, 40);
+    }
     const time = conv.lastMessage ? formatTime(conv.lastMessage.timestamp) : '';
     const unread = unreadCounts[conv.id];
 
     if (conv.type === 'direct') {
       const other = conv.otherUser;
       if (!other) return;
-      el.onclick = () => startChatWithUser(other);
+      el.onclick = () => openConversation(conv.id, { ...other, isOnline: conv.isOnline });
       el.innerHTML = `
         <div class="avatar-wrap">
           <img class="avatar ${conv.isOnline ? 'online' : ''}" src="${other.avatar}" alt="${other.displayName}" />
@@ -209,7 +216,6 @@ function renderConvList(list) {
         </div>
       `;
     } else {
-      // Group or Channel
       const badge = conv.type === 'channel' ? '📢' : '👥';
       const badgeLabel = conv.type === 'channel' ? 'قناة' : 'مجموعة';
       const badgeCls = conv.type === 'channel' ? 'channel-badge' : 'group-badge';
@@ -234,6 +240,7 @@ function renderConvList(list) {
     container.appendChild(el);
   });
 }
+
 
 function updateConvLastMessage(convId, msg) {
   const el = document.getElementById(`conv-${convId}`);
