@@ -777,7 +777,7 @@ app.post('/api/call/token', authMiddleware, async (req, res) => {
 
   try {
     const at = new AccessToken(LK_KEY, LK_SECRET, {
-      identity: req.user.userId,
+      identity: req.userId,
       ttl: 3600 // 1 hour
     });
     at.addGrant({
@@ -789,7 +789,7 @@ app.post('/api/call/token', authMiddleware, async (req, res) => {
     const token = await at.toJwt();
 
     // Log call start in security log
-    secLog('CALL_START', { userId: req.user.userId, room: roomName, type: callType || 'audio', ip: req.ip });
+    secLog('CALL_START', { userId: req.userId, room: roomName, type: callType || 'audio', ip: req.ip });
 
     res.json({ token, url: LK_URL });
   } catch (e) {
