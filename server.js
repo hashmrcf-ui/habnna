@@ -58,8 +58,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowed = /^(image\/(jpeg|jpg|png|gif|webp)|application\/pdf|audio\/mpeg|video\/mp4|application\/(zip|msword|vnd\.openxmlformats|octet-stream)|text\/plain)$/;
-    const extOk = /^\.(jpg|jpeg|png|gif|webp|pdf|mp3|mp4|zip|doc|docx|txt)$/i.test(path.extname(file.originalname));
+    const allowed = /^(image\/(jpeg|jpg|png|gif|webp)|application\/pdf|audio\/(mpeg|webm|ogg|mp4)|video\/mp4|application\/(zip|msword|vnd\.openxmlformats|octet-stream)|text\/plain)$/;
+    const extOk = /^\.(jpg|jpeg|png|gif|webp|pdf|mp3|mp4|webm|ogg|zip|doc|docx|txt)$/i.test(path.extname(file.originalname));
     if (!extOk) return cb(new Error('نوع الملف غير مدعوم'), false);
     cb(null, true);
   }

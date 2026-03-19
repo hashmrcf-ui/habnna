@@ -419,6 +419,28 @@ function appendMessage(msg, animate = true) {
       <img src="${imgUrl}" alt="صورة" class="chat-image" onclick="viewImage('${imgUrl}')" loading="lazy" />
       ${caption ? `<div class="img-caption-text">${escHtml(caption)}</div>` : ''}
     `;
+  } else if (msg.type === 'audio') {
+    // Voice message bubble
+    let audioData = {};
+    try { audioData = JSON.parse(msg.content); } catch { audioData = { url: msg.content, duration: 0 }; }
+    const dur = audioData.duration || 0;
+    const durStr = `${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')}`;
+    // Generate random-looking waveform bars
+    const bars = Array.from({length: 24}, () =>
+      `<span style="height:${4 + Math.random()*20}px"></span>`).join('');
+    const uid = 'aud_' + Math.random().toString(36).slice(2);
+    bubble.innerHTML = `
+      <div class="audio-msg">
+        <button class="audio-play-btn" id="playbtn_${uid}" onclick="toggleAudioPlay('${uid}','${audioData.url}')">
+          <svg id="playicon_${uid}" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+        <div class="audio-waveform" id="wave_${uid}">${bars}</div>
+        <span class="audio-duration" id="dur_${uid}">${durStr}</span>
+        <audio id="audio_${uid}" src="${audioData.url}" preload="none"
+          ontimeupdate="updateAudioProgress('${uid}',this)"
+          onended="audioEnded('${uid}','${durStr}')"></audio>
+      </div>
+    `;
   } else if (msg.type === 'file') {
     // Parse JSON file data stored in content
     let fileData = {};
@@ -463,9 +485,60 @@ function appendMessage(msg, animate = true) {
 
 function getFileIcon(name) {
   const ext = name.split('.').pop().toLowerCase();
-  const icons = { pdf: '📄', mp4: '🎬', mp3: '🎵', zip: '🗜️', doc: '📝', docx: '📝', txt: '📋' };
+  const icons = { pdf: '📄', mp4: '🎬', mp3: '🎵', webm: '🎙️', ogg: '🎙️', zip: '🗜️', doc: '📝', docx: '📝', txt: '📋' };
   return icons[ext] || '📎';
 }
+
+// ── Audio Player helpers ──────────────────────────────────────
+let _currentAudio = null; // track playing audio element
+
+function toggleAudioPlay(uid, url) {
+  const el = document.getElementById(`audio_${uid}`);
+  const icon = document.getElementById(`playicon_${uid}`);
+  const wave = document.getElementById(`wave_${uid}`);
+
+  if (!el) return;
+
+  // Pause any other playing audio first
+  if (_currentAudio && _currentAudio !== el) {
+    _currentAudio.pause();
+  }
+
+  if (el.paused) {
+    el.play();
+    _currentAudio = el;
+    wave.classList.add('playing');
+    // Pause icon
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+  } else {
+    el.pause();
+    wave.classList.remove('playing');
+    // Play icon
+    icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+  }
+}
+
+function updateAudioProgress(uid, el) {
+  const durEl = document.getElementById(`dur_${uid}`);
+  if (!durEl) return;
+  const remaining = el.duration - el.currentTime;
+  if (!isNaN(remaining)) {
+    const m = Math.floor(remaining / 60);
+    const s = String(Math.floor(remaining % 60)).padStart(2, '0');
+    durEl.textContent = `${m}:${s}`;
+  }
+}
+
+function audioEnded(uid, originalDur) {
+  const icon = document.getElementById(`playicon_${uid}`);
+  const wave = document.getElementById(`wave_${uid}`);
+  const durEl = document.getElementById(`dur_${uid}`);
+  if (icon) icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+  if (wave) wave.classList.remove('playing');
+  if (durEl) durEl.textContent = originalDur;
+  _currentAudio = null;
+}
+
 
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -516,6 +589,97 @@ function handleTyping() {
   const ta = document.getElementById('msg-input');
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+
+// ── Toggle Send / Mic button ─────────────────────────────────
+function toggleSendMic() {
+  const hasText = document.getElementById('msg-input').value.trim().length > 0;
+  document.getElementById('send-btn').style.display = hasText ? 'flex' : 'none';
+  document.getElementById('mic-btn').style.display  = hasText ? 'none' : 'flex';
+}
+
+// Init: show mic by default
+document.addEventListener('DOMContentLoaded', () => toggleSendMic());
+
+// ── Voice Recording ──────────────────────────────────────────
+let _mediaRecorder = null;
+let _audioChunks   = [];
+let _recTimerInt   = null;
+let _recSeconds    = 0;
+let _recCancelled  = false;
+
+async function startVoiceRecord(e) {
+  if (e) e.preventDefault();
+  if (!activeConvId) return showToast('افتح محادثة أولاً');
+  if (_mediaRecorder) return;
+  _recCancelled = false;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+    _mediaRecorder = new MediaRecorder(stream, { mimeType });
+    _audioChunks = [];
+
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+    _mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      if (_recCancelled || _audioChunks.length === 0) return;
+      const blob = new Blob(_audioChunks, { type: mimeType });
+      if (blob.size < 1000) return; // too short
+      const file = new File([blob], `voice_${Date.now()}.webm`, { type: mimeType });
+      try {
+        const data = await uploadWithProgress(file);
+        socket.emit('message:send', {
+          convId: activeConvId,
+          content: JSON.stringify({ url: data.url, duration: _recSeconds }),
+          type: 'audio'
+        });
+      } catch { showToast('❌ فشل إرسال الرسالة الصوتية'); }
+    };
+
+    _mediaRecorder.start(200);
+    _recSeconds = 0;
+    document.getElementById('recording-bar').classList.remove('hidden');
+    document.getElementById('rec-timer').textContent = '0:00';
+    _recTimerInt = setInterval(() => {
+      _recSeconds++;
+      const m = Math.floor(_recSeconds / 60);
+      const s = String(_recSeconds % 60).padStart(2, '0');
+      document.getElementById('rec-timer').textContent = `${m}:${s}`;
+      if (_recSeconds >= 120) stopVoiceRecord(); // max 2 min
+    }, 1000);
+
+  } catch {
+    showToast('❌ لا يمكن الوصول للميكروفون');
+  }
+}
+
+function stopVoiceRecord(e) {
+  if (e) e.preventDefault();
+  if (!_mediaRecorder) return;
+  clearInterval(_recTimerInt);
+  document.getElementById('recording-bar').classList.add('hidden');
+  _mediaRecorder.stop();
+  _mediaRecorder = null;
+}
+
+function cancelVoiceRecord() {
+  _recCancelled = true;
+  stopVoiceRecord();
+  showToast('تم إلغاء التسجيل');
+}
+
+// ── Camera Capture ───────────────────────────────────────────
+function triggerCameraCapture() {
+  document.getElementById('attach-popup').classList.remove('open');
+  document.getElementById('attach-toggle-btn').classList.remove('active');
+  if (!activeConvId) return showToast('افتح محادثة أولاً');
+  const input = document.getElementById('file-input');
+  input.accept = 'image/*';
+  input.setAttribute('capture', 'environment');
+  input.click();
+  // Remove capture attr after to not affect other file picks
+  setTimeout(() => input.removeAttribute('capture'), 500);
 }
 
 // ── File Attachment ───────────────────────────────────────────

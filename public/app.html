@@ -112,15 +112,19 @@
           <!-- Attachment popup -->
           <div class="attach-menu-wrap" id="attach-menu-wrap">
             <div class="attach-popup" id="attach-popup">
-              <button class="attach-opt" onclick="triggerFileInput('image/*')" style="--c:#25D366">
+              <button class="attach-opt" onclick="triggerFileInput('image/*,video/*')" style="--c:#25D366">
                 <span class="attach-opt-icon">🖼️</span>
                 <span>صور وفيديو</span>
+              </button>
+              <button class="attach-opt" onclick="triggerCameraCapture()" style="--c:#FF6B6B">
+                <span class="attach-opt-icon">📷</span>
+                <span>الكاميرا</span>
               </button>
               <button class="attach-opt" onclick="triggerFileInput('.pdf,.doc,.docx,.txt,.zip')" style="--c:#34B7F1">
                 <span class="attach-opt-icon">📄</span>
                 <span>مستند</span>
               </button>
-              <button class="attach-opt" onclick="triggerFileInput('audio/*')" style="--c:#FF6B6B">
+              <button class="attach-opt" onclick="triggerFileInput('audio/*')" style="--c:#A78BFA">
                 <span class="attach-opt-icon">🎵</span>
                 <span>صوت</span>
               </button>
@@ -136,12 +140,33 @@
               placeholder="اكتب رسالة..."
               rows="1"
               onkeydown="handleMsgKey(event)"
-              oninput="handleTyping()"
+              oninput="handleTyping(); toggleSendMic();"
             ></textarea>
           </div>
-          <button class="send-btn" id="send-btn" onclick="sendMessage()">
+
+          <!-- Send btn (shows when typing) -->
+          <button class="send-btn" id="send-btn" onclick="sendMessage()" style="display:none">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           </button>
+
+          <!-- Mic btn (shows when not typing) -->
+          <button class="mic-btn" id="mic-btn"
+            onmousedown="startVoiceRecord()"
+            onmouseup="stopVoiceRecord()"
+            ontouchstart="startVoiceRecord(event)"
+            ontouchend="stopVoiceRecord(event)"
+            title="اضغط مطولاً للتسجيل">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+
+        </div>
+
+        <!-- Recording indicator -->
+        <div class="recording-bar hidden" id="recording-bar">
+          <span class="rec-dot"></span>
+          <span id="rec-timer">0:00</span>
+          <span class="rec-hint">ارفع إصبعك للإرسال — مرّر للإلغاء</span>
+          <button class="rec-cancel" onclick="cancelVoiceRecord()">✕</button>
         </div>
       </div>
     </main>
