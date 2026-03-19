@@ -67,9 +67,7 @@ const AmeenCall = (() => {
 
   // ── Join LiveKit Room ────────────────────────────────────────────
   async function joinRoom(roomName, callType) {
-    if (!window.LivekitClient) {
-      throw new Error('LiveKit SDK غير محمّل');
-    }
+    if (!window.LivekitClient) throw new Error('LiveKit SDK غير محمّل');
 
     // Get token from server
     const token = localStorage.getItem('ameen_token');
@@ -78,7 +76,15 @@ const AmeenCall = (() => {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ roomName, callType })
     });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `خطأ في الخادم (${res.status})`);
+    }
+
     const { token: lkToken, url } = await res.json();
+    if (!url) throw new Error('LIVEKIT_URL غير مضبوط في السيرفر');
+    if (!lkToken) throw new Error('فشل إنشاء التوكن');
 
     room = new LivekitClient.Room({
       adaptiveStream: true,

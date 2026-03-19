@@ -159,17 +159,9 @@ function setupSocketListeners() {
     loadConversations();
   });
 
-  // ── WebRTC Call Events ──
+  // ── LiveKit Call Events ──
   socket.on('call:incoming', (data) => {
     AmeenCall.handleIncomingCall(data);
-  });
-
-  socket.on('call:answered', ({ answer }) => {
-    AmeenCall.handleAnswer(answer);
-  });
-
-  socket.on('call:ice-candidate', ({ candidate }) => {
-    AmeenCall.handleIceCandidate(candidate);
   });
 
   socket.on('call:rejected', () => {
