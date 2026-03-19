@@ -1,86 +1,53 @@
 /**
- * Ameen Call Engine — WebRTC Voice & Video Calls
- * Peer-to-peer encrypted calls using STUN servers
+ * Ameen Call Engine — LiveKit SFU
+ * Calls routed via LiveKit for security monitoring capability
  */
 
 const AmeenCall = (() => {
-  // State
-  let localStream = null;
-  let remoteStream = null;
-  let peerConnection = null;
-  let currentCallType = null;  // 'audio' | 'video'
+  let room = null;
+  let currentCallType = null;
   let remoteUserId = null;
   let callStartTime = null;
   let timerInterval = null;
-  let isCaller = false;
-
-  const STUN_SERVERS = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
-    ]
-  };
 
   // ── Start Outgoing Call ──────────────────────────────────────────
   async function startCall(targetUserId, targetName, targetAvatar, callType = 'audio') {
     remoteUserId = targetUserId;
     currentCallType = callType;
-    isCaller = true;
+
+    // Generate unique room name for this direct call
+    const roomName = [socket.id.slice(0,8), targetUserId.slice(0,8)].sort().join('-');
 
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: callType === 'video'
+      // Signal the other user via socket (same flow as before)
+      socket.emit('call:offer', {
+        targetUserId,
+        callType,
+        roomName          // ← send room name instead of WebRTC offer
       });
+
+      showCallOverlay({ name: targetName, avatar: targetAvatar, callType, state: 'calling' });
+
+      // Join LiveKit room
+      await joinRoom(roomName, callType);
+
     } catch (e) {
-      showCallError('لا يمكن الوصول إلى ' + (callType === 'video' ? 'الكاميرا/المايك' : 'المايكروفون'));
-      return;
+      showCallError('فشل الاتصال: ' + e.message);
     }
-
-    showCallOverlay({ name: targetName, avatar: targetAvatar, callType, state: 'calling' });
-
-    if (callType === 'video') {
-      document.getElementById('call-local-video').srcObject = localStream;
-    }
-
-    peerConnection = createPeerConnection(targetUserId);
-
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-
-    socket.emit('call:offer', { targetUserId, offer, callType });
   }
 
   // ── Handle Incoming Call ─────────────────────────────────────────
-  function handleIncomingCall({ callerId, callerName, callerAvatar, offer, callType }) {
+  function handleIncomingCall({ callerId, callerName, callerAvatar, callType, roomName }) {
     remoteUserId = callerId;
     currentCallType = callType;
-    isCaller = false;
-
-    // Store offer for when user answers
-    window._pendingOffer = { offer, callerId };
-
+    window._pendingCall = { callerId, roomName };
     showIncomingCallUI({ callerName, callerAvatar, callType });
   }
 
   // ── Answer Call ──────────────────────────────────────────────────
   async function answerCall() {
-    const { offer, callerId } = window._pendingOffer;
-    remoteUserId = callerId;
-
-    try {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: currentCallType === 'video'
-      });
-    } catch (e) {
-      rejectCall();
-      showCallError('لا يمكن الوصول إلى ' + (currentCallType === 'video' ? 'الكاميرا/المايك' : 'المايكروفون'));
-      return;
-    }
+    const { callerId, roomName } = window._pendingCall || {};
+    if (!roomName) return;
 
     hideIncomingCallUI();
     showCallOverlay({
@@ -90,75 +57,77 @@ const AmeenCall = (() => {
       state: 'connected'
     });
 
-    if (currentCallType === 'video') {
-      document.getElementById('call-local-video').srcObject = localStream;
-    }
-
-    peerConnection = createPeerConnection(callerId);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-
-    socket.emit('call:answer', { callerId, answer });
-    startCallTimer();
-  }
-
-  // ── Create Peer Connection ───────────────────────────────────────
-  function createPeerConnection(targetId) {
-    const pc = new RTCPeerConnection(STUN_SERVERS);
-
-    pc.onicecandidate = ({ candidate }) => {
-      if (candidate) {
-        socket.emit('call:ice-candidate', { targetUserId: targetId, candidate });
-      }
-    };
-
-    pc.ontrack = ({ streams }) => {
-      remoteStream = streams[0];
-      const remoteVideo = document.getElementById('call-remote-video');
-      const remoteAudio = document.getElementById('call-remote-audio');
-      if (remoteVideo && currentCallType === 'video') {
-        remoteVideo.srcObject = remoteStream;
-      } else if (remoteAudio) {
-        remoteAudio.srcObject = remoteStream;
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'connected') {
-        updateCallState('connected');
-        startCallTimer();
-      } else if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
-        endCall(false);
-      }
-    };
-
-    return pc;
-  }
-
-  // ── Handle Remote ICE Candidates ─────────────────────────────────
-  async function handleIceCandidate(candidate) {
-    if (peerConnection && candidate) {
-      try {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-      } catch (e) {}
+    try {
+      await joinRoom(roomName, currentCallType);
+      startCallTimer();
+    } catch (e) {
+      showCallError('فشل الاتصال: ' + e.message);
     }
   }
 
-  // ── Handle Answer ────────────────────────────────────────────────
-  async function handleAnswer(answer) {
-    if (peerConnection) {
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+  // ── Join LiveKit Room ────────────────────────────────────────────
+  async function joinRoom(roomName, callType) {
+    if (!window.LivekitClient) {
+      throw new Error('LiveKit SDK غير محمّل');
+    }
+
+    // Get token from server
+    const token = localStorage.getItem('ameen_token');
+    const res = await fetch('/api/call/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomName, callType })
+    });
+    const { token: lkToken, url } = await res.json();
+
+    room = new LivekitClient.Room({
+      adaptiveStream: true,
+      dynacast: true
+    });
+
+    // Handle remote tracks
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      if (track.kind === LivekitClient.Track.Kind.Video) {
+        const el = document.getElementById('call-remote-video');
+        if (el) track.attach(el);
+      } else if (track.kind === LivekitClient.Track.Kind.Audio) {
+        const el = document.getElementById('call-remote-audio');
+        if (el) track.attach(el);
+        else track.attach(); // auto-attach to new audio element
+      }
+    });
+
+    room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => {
+      endCall(false);
+    });
+
+    room.on(LivekitClient.RoomEvent.Connected, () => {
+      updateCallState('connected');
+      startCallTimer();
+    });
+
+    await room.connect(url, lkToken);
+
+    // Publish local tracks
+    const tracks = await LivekitClient.createLocalTracks({
+      audio: true,
+      video: callType === 'video'
+    });
+
+    for (const track of tracks) {
+      await room.localParticipant.publishTrack(track);
+      if (track.kind === LivekitClient.Track.Kind.Video) {
+        const el = document.getElementById('call-local-video');
+        if (el) track.attach(el);
+      }
     }
   }
 
   // ── Reject Call ──────────────────────────────────────────────────
   function rejectCall() {
-    if (window._pendingOffer) {
-      socket.emit('call:reject', { callerId: window._pendingOffer.callerId });
-      window._pendingOffer = null;
+    if (window._pendingCall) {
+      socket.emit('call:reject', { callerId: window._pendingCall.callerId });
+      window._pendingCall = null;
     }
     hideIncomingCallUI();
   }
@@ -169,13 +138,19 @@ const AmeenCall = (() => {
       socket.emit('call:end', { targetUserId: remoteUserId });
     }
 
-    // Cleanup
     stopTimer();
-    if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    if (peerConnection) { peerConnection.close(); peerConnection = null; }
+
+    if (room) {
+      room.localParticipant.tracks.forEach(pub => {
+        pub.track?.stop();
+      });
+      room.disconnect();
+      room = null;
+    }
+
     remoteUserId = null;
     currentCallType = null;
-    window._pendingOffer = null;
+    window._pendingCall = null;
 
     hideCallOverlay();
     hideIncomingCallUI();
@@ -183,24 +158,28 @@ const AmeenCall = (() => {
 
   // ── Toggle Mute ──────────────────────────────────────────────────
   function toggleMute() {
-    if (!localStream) return;
-    const enabled = localStream.getAudioTracks()[0]?.enabled;
-    localStream.getAudioTracks().forEach(t => t.enabled = !enabled);
+    if (!room) return;
+    const audioTrack = [...room.localParticipant.tracks.values()]
+      .find(p => p.kind === LivekitClient.Track.Kind.Audio);
+    if (!audioTrack) return;
+    const enabled = !audioTrack.isMuted;
+    enabled ? audioTrack.mute() : audioTrack.unmute();
     const btn = document.getElementById('call-mute-btn');
     if (btn) {
       btn.classList.toggle('active', enabled);
-      btn.title = enabled ? 'تشغيل الصوت' : 'كتم الصوت';
       btn.innerHTML = enabled ? muteIcon() : micIcon();
     }
   }
 
   // ── Toggle Video ─────────────────────────────────────────────────
   function toggleVideo() {
-    if (!localStream) return;
-    const enabled = localStream.getVideoTracks()[0]?.enabled;
-    localStream.getVideoTracks().forEach(t => t.enabled = !enabled);
+    if (!room) return;
+    const videoTrack = [...room.localParticipant.tracks.values()]
+      .find(p => p.kind === LivekitClient.Track.Kind.Video);
+    if (!videoTrack) return;
+    videoTrack.isMuted ? videoTrack.unmute() : videoTrack.mute();
     const btn = document.getElementById('call-video-btn');
-    if (btn) btn.classList.toggle('active', enabled);
+    if (btn) btn.classList.toggle('active', videoTrack.isMuted);
   }
 
   // ── Call Timer ───────────────────────────────────────────────────
@@ -227,18 +206,12 @@ const AmeenCall = (() => {
     if (!overlay) return;
     overlay.classList.remove('hidden');
     overlay.dataset.callType = callType;
-
     document.getElementById('call-peer-name').textContent = name;
     document.getElementById('call-peer-avatar').src = avatar;
     document.getElementById('call-type-label').textContent = callType === 'video' ? '📹 مكالمة مرئية' : '🎙️ مكالمة صوتية';
-
     updateCallState(state);
-
-    // Show video elements if video call
     const videoArea = document.getElementById('call-video-area');
     if (videoArea) videoArea.classList.toggle('hidden', callType !== 'video');
-
-    // Hide video-only toggle if audio call
     const videoBtn = document.getElementById('call-video-btn');
     if (videoBtn) videoBtn.style.display = callType === 'video' ? 'flex' : 'none';
   }
@@ -258,10 +231,10 @@ const AmeenCall = (() => {
     if (overlay) overlay.classList.add('hidden');
     const timer = document.getElementById('call-timer');
     if (timer) { timer.textContent = ''; timer.id = 'call-status'; }
-    const remoteVideo = document.getElementById('call-remote-video');
-    if (remoteVideo) remoteVideo.srcObject = null;
-    const localVideo = document.getElementById('call-local-video');
-    if (localVideo) localVideo.srcObject = null;
+    const rv = document.getElementById('call-remote-video');
+    if (rv) rv.srcObject = null;
+    const lv = document.getElementById('call-local-video');
+    if (lv) lv.srcObject = null;
   }
 
   function showIncomingCallUI({ callerName, callerAvatar, callType }) {
@@ -271,7 +244,6 @@ const AmeenCall = (() => {
     document.getElementById('incoming-caller-name').textContent = callerName;
     document.getElementById('incoming-caller-avatar').src = callerAvatar;
     document.getElementById('incoming-call-type').textContent = callType === 'video' ? '📹 مكالمة مرئية واردة' : '🎙️ مكالمة صوتية واردة';
-    // Play ringtone
     try {
       const ctx = new AudioContext();
       function ring() {
@@ -283,8 +255,7 @@ const AmeenCall = (() => {
         o.connect(g); g.connect(ctx.destination);
         o.start(); o.stop(ctx.currentTime + 0.8);
       }
-      ring();
-      window._ringInterval = setInterval(ring, 1500);
+      ring(); window._ringInterval = setInterval(ring, 1500);
     } catch(e) {}
   }
 
@@ -294,15 +265,12 @@ const AmeenCall = (() => {
     clearInterval(window._ringInterval);
   }
 
-  function showCallError(msg) {
-    showToast('❌ ' + msg);
-  }
-
+  function showCallError(msg) { if (typeof showToast === 'function') showToast('❌ ' + msg); }
   function micIcon() { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`; }
   function muteIcon() { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`; }
 
   return {
     startCall, handleIncomingCall, answerCall, rejectCall, endCall,
-    toggleMute, toggleVideo, handleIceCandidate, handleAnswer
+    toggleMute, toggleVideo
   };
 })();

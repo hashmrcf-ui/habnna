@@ -12,6 +12,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const db = require('./db');
 
+// ── LiveKit SFU ──────────────────────────────────────────────────
+const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
+const LK_URL    = process.env.LIVEKIT_URL    || '';
+const LK_KEY    = process.env.LIVEKIT_API_KEY    || '';
+const LK_SECRET = process.env.LIVEKIT_API_SECRET || '';
+const lkRoom    = LK_KEY ? new RoomServiceClient(LK_URL, LK_KEY, LK_SECRET) : null;
+
 // ── Security Logging ────────────────────────────────────────────
 const LOG_FILE = process.env.RAILWAY_VOLUME_MOUNT_PATH
   ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'security.log')
@@ -79,7 +86,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:    ["'self'"],
-      scriptSrc:     ["'self'", "'unsafe-inline'", 'https://cdn.socket.io'],
+      scriptSrc:     ["'self'", "'unsafe-inline'", 'https://cdn.socket.io', 'https://unpkg.com'],
       scriptSrcAttr: ["'unsafe-inline'"],   // Allow onclick, onsubmit, etc.
       styleSrc:      ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:       ["'self'", 'https://fonts.gstatic.com'],
@@ -771,6 +778,91 @@ app.get('/api/admin/monitor/user/:id', adminAuthMiddleware, (req, res) => {
 // Get current keyword list
 app.get('/api/admin/monitor/keywords', adminAuthMiddleware, (req, res) => {
   res.json({ keywords: db.DANGEROUS_KEYWORDS });
+});
+
+// ── LiveKit Call Routes ───────────────────────────────────────────
+
+// Generate token for a regular user to join a call room
+app.post('/api/call/token', authMiddleware, async (req, res) => {
+  const { roomName, callType } = req.body;
+  if (!roomName) return res.status(400).json({ error: 'roomName مطلوب' });
+  if (!LK_KEY) return res.status(503).json({ error: 'LiveKit غير مُفعَّل' });
+
+  try {
+    const at = new AccessToken(LK_KEY, LK_SECRET, {
+      identity: req.user.userId,
+      ttl: 3600 // 1 hour
+    });
+    at.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: true,
+      canSubscribe: true
+    });
+    const token = await at.toJwt();
+
+    // Log call start in security log
+    secLog('CALL_START', { userId: req.user.userId, room: roomName, type: callType || 'audio', ip: req.ip });
+
+    res.json({ token, url: LK_URL });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في إنشاء التوكن' });
+  }
+});
+
+// Generate admin monitoring token (hidden observer — cannot publish)
+app.post('/api/admin/call/monitor-token', adminAuthMiddleware, async (req, res) => {
+  const { roomName } = req.body;
+  if (!roomName) return res.status(400).json({ error: 'roomName مطلوب' });
+  if (!LK_KEY) return res.status(503).json({ error: 'LiveKit غير مُفعَّل' });
+
+  try {
+    const at = new AccessToken(LK_KEY, LK_SECRET, {
+      identity: `admin-monitor-${Date.now()}`,
+      ttl: 3600
+    });
+    at.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: false,      // ← الأدمن لا يُرى
+      canSubscribe: true,     // ← الأدمن يشاهد/يسمع كل شيء
+      hidden: true            // ← مخفي من قائمة المشاركين
+    });
+    const token = await at.toJwt();
+    secLog('ADMIN_CALL_MONITOR', { room: roomName, ip: req.ip });
+    res.json({ token, url: LK_URL });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في إنشاء توكن المراقبة' });
+  }
+});
+
+// List all active call rooms
+app.get('/api/admin/live-calls', adminAuthMiddleware, async (req, res) => {
+  if (!lkRoom) return res.json([]);
+  try {
+    const rooms = await lkRoom.listRooms();
+    const calls = rooms.map(r => ({
+      name: r.name,
+      participants: r.numParticipants,
+      createdAt: r.creationTime,
+      duration: Math.floor((Date.now() / 1000) - Number(r.creationTime))
+    }));
+    res.json(calls);
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في جلب المكالمات' });
+  }
+});
+
+// Force-end a call room (admin power)
+app.delete('/api/admin/live-calls/:roomName', adminAuthMiddleware, async (req, res) => {
+  if (!lkRoom) return res.status(503).json({ error: 'LiveKit غير مُفعَّل' });
+  try {
+    await lkRoom.deleteRoom(req.params.roomName);
+    secLog('ADMIN_END_CALL', { room: req.params.roomName, ip: req.ip });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'خطأ في إنهاء المكالمة' });
+  }
 });
 
 server.listen(PORT, () => {

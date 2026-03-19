@@ -144,6 +144,7 @@
     <button class="nav-item" onclick="showPage('conversations')"><span class="icon">💬</span> المحادثات</button>
     <div class="nav-label">النظام</div>
     <button class="nav-item" onclick="showPage('monitor')" id="nav-monitor"><span class="icon">🔍</span> مراقبة أمنية</button>
+    <button class="nav-item" onclick="showPage('livecalls')"><span class="icon">📡</span> مكالمات حية</button>
     <button class="nav-item" onclick="showPage('logs')"><span class="icon">📋</span> سجلات الأمان</button>
     <button class="nav-item" onclick="showPage('system')"><span class="icon">⚙️</span> النظام والنسخ</button>
   </nav>
@@ -218,6 +219,25 @@
             <button class="filter-badge" onclick="filterLog('BACKUP')">💾 نسخ</button>
           </div>
           <div class="logs-area" id="logsArea"><div class="empty">اختر فلتراً أو انقر تحديث</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Calls -->
+    <section class="page" id="page-livecalls">
+      <div class="section">
+        <div class="section-header">
+          <h3>📡 المكالمات الحية الآن</h3>
+          <button class="refresh-btn" onclick="loadLiveCalls()">🔄 تحديث</button>
+        </div>
+        <div id="liveCallsArea"><div class="empty">⏳ انقر تحديث للتحميل</div></div>
+      </div>
+      <!-- Admin watch area -->
+      <div class="section" id="watchArea" style="display:none;margin-top:16px">
+        <div class="section-header"><h3 id="watchRoomTitle">👁️ مشاهدة</h3></div>
+        <div style="padding:16px">
+          <div id="adminVideoGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px"></div>
+          <button class="btn btn-del" style="margin-top:12px" onclick="stopWatch()">❌ إيقاف المشاهدة</button>
         </div>
       </div>
     </section>
@@ -311,7 +331,9 @@ const pageTitles = {
   users: '👥 إدارة المستخدمين',
   conversations: '💬 المحادثات',
   logs: '📋 سجلات الأمان',
-  system: '⚙️ النظام والنسخ'
+  system: '⚙️ النظام والنسخ',
+  monitor: '🔍 مراقبة أمنية',
+  livecalls: '📡 المكالمات الحية'
 };
 
 async function api(path, opts = {}) {
@@ -336,6 +358,7 @@ function showPage(name) {
   if (name === 'logs') loadLogs();
   if (name === 'system') loadStats();
   if (name === 'monitor') { loadFlagged(); populateInvestigateSelect(); }
+  if (name === 'livecalls') loadLiveCalls();
 }
 
 async function loadAll() { await Promise.all([loadStats(), loadUsers(), loadConvs()]); toast('✅ تم التحديث'); }
@@ -514,6 +537,102 @@ function logout() {
     localStorage.removeItem('admin_token');
     window.location.href = '/admin/';
   }
+}
+
+// ── Live Calls Monitoring ──────────────────────────────────────────
+let watchRoom = null;
+
+async function loadLiveCalls() {
+  document.getElementById('liveCallsArea').innerHTML = '<div class="empty">⏳ جاري البحث...</div>';
+  try {
+    const res = await api('/api/admin/live-calls');
+    const calls = await res.json();
+    if (!calls.length) {
+      document.getElementById('liveCallsArea').innerHTML = '<div class="empty">🎙️ لا توجد مكالمات حية الآن</div>';
+      return;
+    }
+    const rows = calls.map(c => {
+      const mins = Math.floor(c.duration / 60);
+      const secs = c.duration % 60;
+      return `<tr>
+        <td style="font-weight:700">📡 ${c.name}</td>
+        <td><span class="badge online">👥 ${c.participants} مشارك</span></td>
+        <td>${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</td>
+        <td><div class="actions">
+          <button class="btn btn-kick" onclick="watchCall('${c.name}')">👁️ مشاهدة</button>
+          <button class="btn btn-del" onclick="endCall('${c.name}')">❌ إنهاء</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+    document.getElementById('liveCallsArea').innerHTML = `
+      <table><thead><tr><th>غرفة المكالمة</th><th>المشاركون</th><th>المدة</th><th>إجراء</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  } catch { document.getElementById('liveCallsArea').innerHTML = '<div class="empty">❌ خطأ في جلب المكالمات</div>'; }
+}
+
+async function watchCall(roomName) {
+  document.getElementById('watchArea').style.display = 'block';
+  document.getElementById('watchRoomTitle').textContent = '👁️ مشاهدة: ' + roomName;
+  document.getElementById('adminVideoGrid').innerHTML = '<div class="empty">⏳ جاري الاتصال...</div>';
+
+  try {
+    const res = await api('/api/admin/call/monitor-token', {
+      method: 'POST',
+      body: JSON.stringify({ roomName })
+    });
+    const { token, url } = await res.json();
+
+    if (!window.LivekitClient) {
+      // Load LiveKit SDK
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/livekit-client/dist/livekit-client.umd.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    if (watchRoom) { watchRoom.disconnect(); watchRoom = null; }
+
+    watchRoom = new LivekitClient.Room();
+    const grid = document.getElementById('adminVideoGrid');
+    grid.innerHTML = '';
+
+    watchRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, pub, participant) => {
+      let el = document.getElementById('vid-' + participant.identity);
+      if (!el) {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'background:#000;border-radius:12px;overflow:hidden;position:relative';
+        wrapper.innerHTML = `<div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;padding:3px 10px;border-radius:20px;font-size:0.8rem">👤 ${participant.identity}</div>`;
+        el = document.createElement('video');
+        el.id = 'vid-' + participant.identity;
+        el.style.cssText = 'width:100%;height:220px;object-fit:cover;display:block';
+        el.autoplay = true; el.playsInline = true; el.muted = false;
+        wrapper.insertBefore(el, wrapper.firstChild);
+        grid.appendChild(wrapper);
+      }
+      if (track.kind === LivekitClient.Track.Kind.Video) track.attach(el);
+    });
+
+    await watchRoom.connect(url, token);
+    toast('👁️ تم الاتصال بالغرفة');
+    if (!grid.children.length) grid.innerHTML = '<div class="empty">⏳ انتظار فيديو المشاركين...</div>';
+  } catch(e) {
+    document.getElementById('adminVideoGrid').innerHTML = '<div class="empty">❌ فشل الاتصال: ' + e.message + '</div>';
+  }
+}
+
+function stopWatch() {
+  if (watchRoom) { watchRoom.disconnect(); watchRoom = null; }
+  document.getElementById('watchArea').style.display = 'none';
+  document.getElementById('adminVideoGrid').innerHTML = '';
+}
+
+async function endCall(roomName) {
+  if (!confirm(`إنهاء المكالمة: ${roomName}?`)) return;
+  await api(`/api/admin/live-calls/${encodeURIComponent(roomName)}`, { method: 'DELETE' });
+  toast('❌ تم إنهاء المكالمة');
+  loadLiveCalls();
 }
 
 // ── Security Monitoring ──────────────────────────────────────────
