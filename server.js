@@ -776,8 +776,9 @@ app.post('/api/call/token', authMiddleware, async (req, res) => {
   if (!LK_KEY) return res.status(503).json({ error: 'LiveKit غير مُفعَّل' });
 
   try {
+    const identity = String(req.userId);
     const at = new AccessToken(LK_KEY, LK_SECRET, {
-      identity: req.userId,
+      identity,
       ttl: 3600 // 1 hour
     });
     at.addGrant({
@@ -789,12 +790,37 @@ app.post('/api/call/token', authMiddleware, async (req, res) => {
     const token = await at.toJwt();
 
     // Log call start in security log
-    secLog('CALL_START', { userId: req.userId, room: roomName, type: callType || 'audio', ip: req.ip });
+    secLog('CALL_START', { userId: identity, room: roomName, type: callType || 'audio', ip: req.ip });
+    console.log(`[CALL] Token generated: room=${roomName} user=${identity} url=${LK_URL}`);
 
     res.json({ token, url: LK_URL });
   } catch (e) {
-    res.status(500).json({ error: 'خطأ في إنشاء التوكن' });
+    console.error('[CALL] Token error:', e.message);
+    res.status(500).json({ error: 'خطأ في إنشاء التوكن', detail: e.message });
   }
+});
+
+// Debug endpoint — verify LiveKit config (no secret exposed)
+app.get('/api/call/debug', authMiddleware, async (req, res) => {
+  const isConfigured = !!(LK_KEY && LK_SECRET && LK_URL);
+  let roomCount = 0;
+  let listError = null;
+  try {
+    if (lkRoom) {
+      const rooms = await lkRoom.listRooms();
+      roomCount = rooms.length;
+    }
+  } catch (e) {
+    listError = e.message;
+  }
+  res.json({
+    configured: isConfigured,
+    url: LK_URL,
+    keyPrefix: LK_KEY ? LK_KEY.slice(0, 6) + '***' : null,
+    activeRooms: roomCount,
+    listError
+  });
+});
 });
 
 // Generate admin monitoring token (hidden observer — cannot publish)
