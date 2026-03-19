@@ -392,14 +392,17 @@ const adminQueries = {
 };
 
 function getAllUsers() {
-  return adminQueries.getAllUsers.all().map(row => ({
-    ...mapUser(row),
-    messageCount: row.message_count,
-    convCount: row.conv_count,
-    banned: !!row.banned,
-    banReason: row.ban_reason || null,
-    lastSeen: row.last_seen || null
-  }));
+  return adminQueries.getAllUsers.all().map(row => {
+    const safe = safeUser(row);
+    return {
+      ...safe,
+      messageCount: row.message_count,
+      convCount: row.conv_count,
+      banned: !!row.banned,
+      banReason: row.ban_reason || null,
+      lastSeen: row.last_seen || null
+    };
+  });
 }
 
 function banUser(userId, reason) {
