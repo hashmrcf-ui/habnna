@@ -742,6 +742,37 @@ app.post('/api/admin/backup', adminAuthMiddleware, (req, res) => {
   res.json({ ok: true, message: 'تم بدء النسخة الاحتياطية' });
 });
 
+// ── Security Monitoring Routes ────────────────────────────────────
+
+// Get all messages containing dangerous keywords (auto-flagged)
+app.get('/api/admin/monitor/flagged', adminAuthMiddleware, (req, res) => {
+  const flagged = db.getFlaggedMessages();
+  secLog('ADMIN_VIEW_FLAGGED', { count: flagged.length, ip: req.ip });
+  res.json(flagged);
+});
+
+// Search messages by any keyword
+app.get('/api/admin/monitor/search', adminAuthMiddleware, (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 2) return res.status(400).json({ error: 'كلمة البحث قصيرة جداً' });
+  const results = db.searchMessages(q.trim(), 100);
+  secLog('ADMIN_SEARCH', { keyword: q, ip: req.ip });
+  res.json(results);
+});
+
+// Get full user activity/investigation report
+app.get('/api/admin/monitor/user/:id', adminAuthMiddleware, (req, res) => {
+  const report = db.getUserActivity(req.params.id);
+  if (!report) return res.status(404).json({ error: 'المستخدم غير موجود' });
+  secLog('ADMIN_USER_REPORT', { targetId: req.params.id, ip: req.ip });
+  res.json(report);
+});
+
+// Get current keyword list
+app.get('/api/admin/monitor/keywords', adminAuthMiddleware, (req, res) => {
+  res.json({ keywords: db.DANGEROUS_KEYWORDS });
+});
+
 server.listen(PORT, () => {
   console.log(`🔐 Ameen Messenger running on http://localhost:${PORT}`);
   console.log(`🗄️  Database: ameen.db (SQLite — persistent storage)`);

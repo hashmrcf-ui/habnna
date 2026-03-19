@@ -448,6 +448,82 @@ function getStats() {
   return adminQueries.stats.get();
 }
 
+// ── Security Monitoring ───────────────────────────────────────────
+
+// Dangerous keyword list (Arabic + English)
+const DANGEROUS_KEYWORDS = [
+  // Drugs
+  'مخدرات','حشيش','كوكايين','هيروين','شابو','كبتاغون','مخدر','بودرة','كيلو',
+  'drugs','cocaine','heroin','weed','meth','crystal',
+  // Terror/Violence
+  'إرهاب','تفجير','قنبلة','متفجر','داعش','تنظيم','سلاح','رصاص','كلاشن',
+  'bomb','explosion','terror','attack','weapon','kill',
+  // Money laundering
+  'غسيل الأموال','تهريب','عملات مزورة','فدية',
+  'laundering','smuggling','ransom'
+];
+
+function searchMessages(keyword, limit = 100) {
+  const q = `%${keyword}%`;
+  return db.prepare(`
+    SELECT m.*, u.username, u.display_name
+    FROM messages m
+    JOIN users u ON u.id = m.sender_id
+    WHERE m.content LIKE ?
+    ORDER BY m.timestamp DESC
+    LIMIT ?
+  `).all(q, limit).map(row => ({
+    id: row.id,
+    convId: row.conv_id,
+    senderId: row.sender_id,
+    username: row.username,
+    displayName: row.display_name,
+    content: row.content,
+    type: row.type,
+    timestamp: row.timestamp
+  }));
+}
+
+function getUserActivity(userId) {
+  const user = getUserById(userId);
+  if (!user) return null;
+  const messages = db.prepare(`
+    SELECT m.*, c.type as conv_type, c.name as conv_name
+    FROM messages m
+    JOIN conversations c ON c.id = m.conv_id
+    WHERE m.sender_id = ?
+    ORDER BY m.timestamp DESC
+    LIMIT 200
+  `).all(userId).map(row => ({
+    id: row.id,
+    convId: row.conv_id,
+    convType: row.conv_type,
+    convName: row.conv_name,
+    content: row.content,
+    type: row.type,
+    timestamp: row.timestamp
+  }));
+  const convs = db.prepare(`
+    SELECT c.* FROM conversations c
+    JOIN conversation_members cm ON cm.conv_id = c.id
+    WHERE cm.user_id = ?
+  `).all(userId);
+  return { user: safeUser(user), messages, conversations: convs };
+}
+
+function getFlaggedMessages(limit = 200) {
+  const results = [];
+  DANGEROUS_KEYWORDS.forEach(kw => {
+    const found = searchMessages(kw, 20);
+    found.forEach(msg => {
+      if (!results.find(r => r.id === msg.id)) {
+        results.push({ ...msg, flaggedWord: kw });
+      }
+    });
+  });
+  return results.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit);
+}
+
 module.exports = {
   createUser, getUserByUsername, getUserById, searchUsers,
   findDirectConv, createConversation, addConvMember, removeConvMember,
@@ -457,5 +533,6 @@ module.exports = {
   setTotpSecret, enableTotp, disableTotp,
   deleteUserAccount,
   getAllUsers, banUser, unbanUser, updateLastSeen, isUserBanned,
-  getAllConversations, deleteConversationById, getStats
+  getAllConversations, deleteConversationById, getStats,
+  searchMessages, getUserActivity, getFlaggedMessages, DANGEROUS_KEYWORDS
 };

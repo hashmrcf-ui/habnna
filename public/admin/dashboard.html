@@ -143,6 +143,7 @@
     <button class="nav-item" onclick="showPage('users')"><span class="icon">👥</span> إدارة المستخدمين</button>
     <button class="nav-item" onclick="showPage('conversations')"><span class="icon">💬</span> المحادثات</button>
     <div class="nav-label">النظام</div>
+    <button class="nav-item" onclick="showPage('monitor')" id="nav-monitor"><span class="icon">🔍</span> مراقبة أمنية</button>
     <button class="nav-item" onclick="showPage('logs')"><span class="icon">📋</span> سجلات الأمان</button>
     <button class="nav-item" onclick="showPage('system')"><span class="icon">⚙️</span> النظام والنسخ</button>
   </nav>
@@ -221,6 +222,44 @@
       </div>
     </section>
 
+    <!-- Security Monitor -->
+    <section class="page" id="page-monitor">
+      <!-- Flagged Messages -->
+      <div class="section" style="margin-bottom:20px">
+        <div class="section-header">
+          <h3>🚨 رسائل مشبوهة (اكتشاف تلقائي)</h3>
+          <button class="refresh-btn" onclick="loadFlagged()">&#x1F504; تحديث</button>
+        </div>
+        <div id="flaggedTable"><div class="empty">⏳ انقر تحديث للتحميل...</div></div>
+      </div>
+
+      <!-- Search Messages -->
+      <div class="section" style="margin-bottom:20px">
+        <div class="section-header">
+          <h3>🔎 بحث في الرسائل</h3>
+          <div style="display:flex;gap:8px">
+            <input class="search-bar" type="text" id="msgSearch" placeholder="كلمة البحث..." style="width:200px">
+            <button class="refresh-btn" onclick="searchMsgs()">🔍 بحث</button>
+          </div>
+        </div>
+        <div id="searchResults"><div class="empty">اكتب كلمة واضغط بحث</div></div>
+      </div>
+
+      <!-- User Investigation -->
+      <div class="section">
+        <div class="section-header">
+          <h3>📂 تقرير حساب (تحقيق)</h3>
+          <div style="display:flex;gap:8px">
+            <select class="search-bar" id="investigateUser" style="width:200px">
+              <option value="">اختر مستخدماً...</option>
+            </select>
+            <button class="refresh-btn" onclick="loadUserReport()">📊 تقرير</button>
+          </div>
+        </div>
+        <div id="userReport"><div class="empty">اختر مستخدماً واضغط تقرير</div></div>
+      </div>
+    </section>
+
     <!-- System -->
     <section class="page" id="page-system">
       <div class="section">
@@ -296,6 +335,7 @@ function showPage(name) {
   if (name === 'conversations' && allConvs.length === 0) loadConvs();
   if (name === 'logs') loadLogs();
   if (name === 'system') loadStats();
+  if (name === 'monitor') { loadFlagged(); populateInvestigateSelect(); }
 }
 
 async function loadAll() { await Promise.all([loadStats(), loadUsers(), loadConvs()]); toast('✅ تم التحديث'); }
@@ -474,6 +514,90 @@ function logout() {
     localStorage.removeItem('admin_token');
     window.location.href = '/admin/';
   }
+}
+
+// ── Security Monitoring ──────────────────────────────────────────
+async function loadFlagged() {
+  document.getElementById('flaggedTable').innerHTML = '<div class="empty">⏳ جاري فحص الرسائل...</div>';
+  try {
+    const res = await api('/api/admin/monitor/flagged');
+    const data = await res.json();
+    if (!data.length) { document.getElementById('flaggedTable').innerHTML = '<div class="empty">✅ لا محتوى مشبوه</div>'; return; }
+    const rows = data.map(m => `
+      <tr style="background:rgba(239,68,68,0.04)">
+        <td><span class="badge banned">${m.flaggedWord}</span></td>
+        <td><strong>@${m.username}</strong> (${m.displayName})</td>
+        <td style="max-width:320px;word-break:break-word">${m.content}</td>
+        <td style="font-size:0.75rem;color:#666">${new Date(m.timestamp).toLocaleString('ar')}</td>
+        <td>
+          <button class="btn btn-ban" onclick="openBan('${m.senderId}')">&#x1F6AB; حظر</button>
+          <button class="btn btn-kick" onclick="forceLogout('${m.senderId}')">⚡ طرد</button>
+        </td>
+      </tr>`).join('');
+    document.getElementById('flaggedTable').innerHTML = `<table><thead><tr><th>الكلمة المشبوهة</th><th>المرسل</th><th>محتوى الرسالة</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) { document.getElementById('flaggedTable').innerHTML = '<div class="empty">❌ خطأ في التحميل</div>'; }
+}
+
+async function searchMsgs() {
+  const q = document.getElementById('msgSearch').value.trim();
+  if (!q) return;
+  document.getElementById('searchResults').innerHTML = '<div class="empty">⏳ جاري البحث...</div>';
+  try {
+    const res = await api(`/api/admin/monitor/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.length) { document.getElementById('searchResults').innerHTML = '<div class="empty">لا نتائج</div>'; return; }
+    const rows = data.map(m => `
+      <tr>
+        <td><strong>@${m.username}</strong></td>
+        <td style="max-width:400px;word-break:break-word">${m.content.replace(new RegExp(q,'gi'), s => `<mark style="background:#f59e0b33;color:#fcd34d">${s}</mark>`)}</td>
+        <td style="font-size:0.75rem;color:#666">${new Date(m.timestamp).toLocaleString('ar')}</td>
+        <td><button class="btn btn-ban" onclick="openBan('${m.senderId}')">⚠️ إجراء</button></td>
+      </tr>`).join('');
+    document.getElementById('searchResults').innerHTML = `<table><thead><tr><th>المرسل</th><th>محتوى الرسالة</th><th>التاريخ</th><th>إجراء</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch { document.getElementById('searchResults').innerHTML = '<div class="empty">❌ خطأ</div>'; }
+}
+
+function populateInvestigateSelect() {
+  const sel = document.getElementById('investigateUser');
+  sel.innerHTML = '<option value="">اختر مستخدماً...</option>' +
+    allUsers.map(u => `<option value="${u.id}">@${u.username} — ${u.displayName}</option>`).join('');
+}
+
+async function loadUserReport() {
+  const userId = document.getElementById('investigateUser').value;
+  if (!userId) return;
+  document.getElementById('userReport').innerHTML = '<div class="empty">⏳ جاري تجهيز التقرير...</div>';
+  try {
+    const res = await api(`/api/admin/monitor/user/${userId}`);
+    const d = await res.json();
+    const u = d.user;
+    const messages = d.messages || [];
+    const convs = d.conversations || [];
+    const msgRows = messages.map(m => `<tr>
+      <td style="max-width:400px;word-break:break-word">${m.content}</td>
+      <td><span class="badge ${m.convType}">${m.convType === 'direct' ? 'خاصة' : 'مجموعة'}</span></td>
+      <td style="font-size:0.75rem;color:#666">${new Date(m.timestamp).toLocaleString('ar')}</td>
+    </tr>`).join('');
+    document.getElementById('userReport').innerHTML = `
+      <div style="padding:20px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:16px;align-items:center">
+          <img src="${u.avatar}" style="width:52px;height:52px;border-radius:50%" onerror="this.src='https://api.dicebear.com/7.x/initials/svg?seed=${u.username}'">
+          <div>
+            <div style="font-weight:800;font-size:1.1rem">${u.displayName}</div>
+            <div style="color:#666;font-size:0.85rem">@${u.username}</div>
+            <div style="color:#666;font-size:0.75rem">تسجيل: ${new Date(u.createdAt).toLocaleDateString('ar')} | محادثات: ${convs.length} | رسائل: ${messages.length}</div>
+          </div>
+          <div style="margin-right:auto;display:flex;gap:8px">
+            <button class="btn btn-ban" onclick="openBan('${u.id}')">🚨 حظر فوري</button>
+            <button class="btn btn-del" onclick="deleteUser('${u.id}','${u.username}')">🗑️ حذف</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:16px">
+        <h4 style="margin-bottom:12px;color:#aaa">💬 آخر ${messages.length} رسالة</h4>
+        ${messages.length ? `<table><thead><tr><th>محتوى الرسالة</th><th>نوع</th><th>التاريخ</th></tr></thead><tbody>${msgRows}</tbody></table>` : '<div class="empty">لا رسائل</div>'}
+      </div>`;
+  } catch { document.getElementById('userReport').innerHTML = '<div class="empty">❌ خطأ في تحميل التقرير</div>'; }
 }
 
 // Init
