@@ -232,14 +232,6 @@
         </div>
         <div id="liveCallsArea"><div class="empty">⏳ انقر تحديث للتحميل</div></div>
       </div>
-      <!-- Admin watch area -->
-      <div class="section" id="watchArea" style="display:none;margin-top:16px">
-        <div class="section-header"><h3 id="watchRoomTitle">👁️ مشاهدة</h3></div>
-        <div style="padding:16px">
-          <div id="adminVideoGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px"></div>
-          <button class="btn btn-del" style="margin-top:12px" onclick="stopWatch()">❌ إيقاف المشاهدة</button>
-        </div>
-      </div>
     </section>
 
     <!-- Security Monitor -->
@@ -559,7 +551,6 @@ async function loadLiveCalls() {
         <td><span class="badge online">👥 ${c.participants} مشارك</span></td>
         <td>${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}</td>
         <td><div class="actions">
-          <button class="btn btn-kick" onclick="watchCall('${c.name}')">👁️ مشاهدة</button>
           <button class="btn btn-del" onclick="endCall('${c.name}')">❌ إنهاء</button>
         </div></td>
       </tr>`;

@@ -821,33 +821,7 @@ app.get('/api/call/debug', authMiddleware, async (req, res) => {
     listError
   });
 });
-});
 
-// Generate admin monitoring token (hidden observer — cannot publish)
-app.post('/api/admin/call/monitor-token', adminAuthMiddleware, async (req, res) => {
-  const { roomName } = req.body;
-  if (!roomName) return res.status(400).json({ error: 'roomName مطلوب' });
-  if (!LK_KEY) return res.status(503).json({ error: 'LiveKit غير مُفعَّل' });
-
-  try {
-    const at = new AccessToken(LK_KEY, LK_SECRET, {
-      identity: `admin-monitor-${Date.now()}`,
-      ttl: 3600
-    });
-    at.addGrant({
-      roomJoin: true,
-      room: roomName,
-      canPublish: false,      // ← الأدمن لا يُرى
-      canSubscribe: true,     // ← الأدمن يشاهد/يسمع كل شيء
-      hidden: true            // ← مخفي من قائمة المشاركين
-    });
-    const token = await at.toJwt();
-    secLog('ADMIN_CALL_MONITOR', { room: roomName, ip: req.ip });
-    res.json({ token, url: LK_URL });
-  } catch (e) {
-    res.status(500).json({ error: 'خطأ في إنشاء توكن المراقبة' });
-  }
-});
 
 // List all active call rooms
 app.get('/api/admin/live-calls', adminAuthMiddleware, async (req, res) => {
