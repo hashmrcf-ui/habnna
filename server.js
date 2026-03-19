@@ -68,6 +68,9 @@ const upload = multer({
 const app = express();
 const server = http.createServer(app);
 
+// ── Trust Railway reverse proxy ────────────────────────────────────
+app.set('trust proxy', 1);
+
 const JWT_SECRET = process.env.JWT_SECRET || 'ameen_secure_secret_2024_!@#';
 const PORT = process.env.PORT || 3000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
