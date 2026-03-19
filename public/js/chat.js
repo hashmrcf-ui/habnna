@@ -324,7 +324,6 @@ async function loadMessages(convId) {
 
 function appendMessage(msg, animate = true) {
   const list = document.getElementById('messages-list');
-  // Remove empty state
   const empty = list.querySelector('div[style*="text-align:center"]');
   if (empty) empty.remove();
 
@@ -335,7 +334,41 @@ function appendMessage(msg, animate = true) {
 
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
-  bubble.textContent = msg.content;
+
+  // Render based on message type
+  if (msg.type === 'image') {
+    bubble.classList.add('msg-bubble-image');
+    bubble.innerHTML = `
+      <img src="${msg.content}" alt="صورة" class="chat-image" onclick="viewImage(this.src)" loading="lazy" />
+    `;
+  } else if (msg.type === 'file') {
+    // Parse JSON file data stored in content
+    let fileData = {};
+    try { fileData = JSON.parse(msg.content); } catch { fileData = { url: msg.content, name: 'ملف' }; }
+    const icon = getFileIcon(fileData.name || '');
+    const size = fileData.size ? formatFileSize(fileData.size) : '';
+    bubble.classList.add('msg-bubble-file');
+    bubble.innerHTML = `
+      <a href="${fileData.url}" target="_blank" download class="file-card">
+        <div class="file-icon">${icon}</div>
+        <div class="file-info">
+          <div class="file-name">${escHtml(fileData.name || 'ملف')}</div>
+          <div class="file-size">${size}</div>
+        </div>
+        <div class="file-dl">⬇️</div>
+      </a>
+    `;
+  } else {
+    bubble.textContent = msg.content;
+  }
+
+  // Sender name for groups
+  if (msg.senderName && !isOut) {
+    const name = document.createElement('div');
+    name.className = 'msg-sender-name';
+    name.textContent = msg.senderName;
+    group.appendChild(name);
+  }
 
   const meta = document.createElement('div');
   meta.className = 'msg-meta';
@@ -348,6 +381,26 @@ function appendMessage(msg, animate = true) {
   group.appendChild(bubble);
   group.appendChild(meta);
   list.appendChild(group);
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const icons = { pdf: '📄', mp4: '🎬', mp3: '🎵', zip: '🗜️', doc: '📝', docx: '📝', txt: '📋' };
+  return icons[ext] || '📎';
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function viewImage(src) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  overlay.innerHTML = `<img src="${src}" style="max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.8)" />`;
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
 }
 
 // ── Sending ───────────────────────────────────────────────────
@@ -389,18 +442,45 @@ function handleTyping() {
 
 // ── File Attachment ───────────────────────────────────────────
 function attachFile() {
+  if (!activeConvId) return showToast('📎 افتح محادثة أولاً');
   document.getElementById('file-input').click();
 }
 
-function handleFileSelected(event) {
+async function handleFileSelected(event) {
   const file = event.target.files[0];
   if (!file || !activeConvId) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    showToast(`📎 ${file.name} — قيد التطوير`);
-  };
-  reader.readAsArrayBuffer(file);
   event.target.value = '';
+
+  const isImage = file.type.startsWith('image/');
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) return showToast('❌ الملف أكبر من 10MB');
+
+  showToast('⏫ جارٍ رفع الملف...');
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+      body: formData
+    });
+
+    if (!res.ok) throw new Error('فشل الرفع');
+    const data = await res.json();
+
+    // Send as message via socket
+    socket.emit('message:send', {
+      convId: activeConvId,
+      content: isImage ? data.url : JSON.stringify({ url: data.url, name: data.name, size: data.size }),
+      type: isImage ? 'image' : 'file'
+    });
+
+    showToast(`✅ تم إرسال: ${file.name}`);
+  } catch (e) {
+    showToast('❌ فشل رفع الملف');
+  }
 }
 
 // ── Typing Indicator ──────────────────────────────────────────

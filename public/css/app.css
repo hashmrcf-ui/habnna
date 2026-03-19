@@ -602,4 +602,45 @@ textarea#msg-input::placeholder { color: rgba(255,255,255,0.25); }
   color: var(--accent); font-weight: 700;
 }
 
+/* ── Chat Images & Files ── */
+.msg-bubble-image {
+  padding: 4px !important;
+  background: transparent !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+}
+.chat-image {
+  max-width: 280px; max-height: 320px;
+  width: 100%; border-radius: 12px;
+  display: block; cursor: zoom-in;
+  transition: opacity 0.2s;
+  object-fit: cover;
+}
+.chat-image:hover { opacity: 0.9; }
+
+.msg-bubble-file { padding: 0 !important; background: transparent !important; }
+.file-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 14px;
+  background: rgba(108,99,255,0.12);
+  border: 1px solid rgba(108,99,255,0.25);
+  text-decoration: none; color: var(--text-primary);
+  transition: background 0.2s;
+  min-width: 200px;
+}
+.file-card:hover { background: rgba(108,99,255,0.2); }
+.file-icon { font-size: 1.8rem; line-height: 1; }
+.file-info { flex: 1; min-width: 0; }
+.file-name { font-size: 0.85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-size { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+.file-dl { font-size: 1.1rem; opacity: 0.7; }
+
+/* ── Group sender name ── */
+.msg-sender-name {
+  font-size: 0.72rem; font-weight: 700;
+  color: var(--primary); margin-bottom: 2px;
+  padding-right: 4px;
+}
+
+
 

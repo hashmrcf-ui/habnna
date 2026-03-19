@@ -5,7 +5,34 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { randomUUID: uuidv4 } = require('crypto');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const db = require('./db');
+
+// ── File Upload Config ────────────────────────────────────────────
+const UPLOADS_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'uploads')
+  : path.join(__dirname, 'public', 'uploads');
+
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${uuidv4()}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|webp|pdf|mp4|mp3|doc|docx|zip|txt/;
+    const ok = allowed.test(path.extname(file.originalname).toLowerCase());
+    cb(ok ? null : new Error('نوع الملف غير مدعوم'), ok);
+  }
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -134,6 +161,32 @@ app.get('/api/conversations/:convId/messages', authMiddleware, (req, res) => {
     return res.status(403).json({ error: 'غير مصرح' });
   res.json(db.getMessages(req.params.convId));
 });
+
+// ── File Upload Route ─────────────────────────────────────────────
+app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'لم يتم رفع ملف' });
+  const isVolume = !!process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  const urlPath = isVolume
+    ? `/api/files/${req.file.filename}`
+    : `/uploads/${req.file.filename}`;
+  res.json({
+    url: urlPath,
+    name: req.file.originalname,
+    size: req.file.size,
+    mime: req.file.mimetype
+  });
+});
+
+// Serve uploaded files from Railway volume if needed
+app.get('/api/files/:filename', authMiddleware, (req, res) => {
+  const filePath = path.join(UPLOADS_DIR, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+  res.sendFile(filePath);
+});
+
+// Serve uploads from public when running locally
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
 
 // ── Socket.io ────────────────────────────────────────────────────
 io.use((socket, next) => {
