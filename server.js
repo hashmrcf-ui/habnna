@@ -78,13 +78,14 @@ const onlineUsers = new Map();
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'", 'https://cdn.socket.io'],
-      styleSrc:   ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:     ["'self'", 'data:', 'https://api.dicebear.com'],
-      connectSrc: ["'self'", 'wss:', 'ws:'],
-      mediaSrc:   ["'self'", 'blob:'],
+      defaultSrc:    ["'self'"],
+      scriptSrc:     ["'self'", "'unsafe-inline'", 'https://cdn.socket.io'],
+      scriptSrcAttr: ["'unsafe-inline'"],   // Allow onclick, onsubmit, etc.
+      styleSrc:      ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:       ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:        ["'self'", 'data:', 'https://api.dicebear.com'],
+      connectSrc:    ["'self'", 'wss:', 'ws:'],
+      mediaSrc:      ["'self'", 'blob:'],
     }
   },
   crossOriginEmbedderPolicy: false
