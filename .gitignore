@@ -1,0 +1,7 @@
+node_modules/
+ameen.db
+ameen.db-shm
+ameen.db-wal
+.env
+*.log
+.DS_Store

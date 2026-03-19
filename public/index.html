@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>آمين — المراسل الآمن</title>
+  <meta name="description" content="تطبيق مراسلة مشفر بالكامل، بياناتك لا تغادر خوادمنا" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/auth.css" />
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-particles" id="particles"></div>
+
+  <div class="auth-container">
+    <!-- Logo -->
+    <div class="logo-section">
+      <div class="logo-icon">
+        <svg viewBox="0 0 60 60" fill="none">
+          <circle cx="30" cy="30" r="28" fill="url(#grad1)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+          <path d="M18 22h24M18 30h16M18 38h20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="44" cy="38" r="6" fill="#00D4AA" stroke="#0a0a1a" stroke-width="2"/>
+          <path d="M41 38l2 2 4-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs>
+            <linearGradient id="grad1" x1="0" y1="0" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#6C63FF"/>
+              <stop offset="100%" stop-color="#3B82F6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1 class="logo-text">آمين</h1>
+      <p class="logo-sub">مراسلة مشفرة من طرف لطرف</p>
+
+      <div class="trust-badges">
+        <span class="badge">🔐 تشفير E2E</span>
+        <span class="badge">🚫 لا بيانات للبيع</span>
+        <span class="badge">🌍 خوادم عربية</span>
+      </div>
+    </div>
+
+    <!-- Auth Card -->
+    <div class="auth-card">
+      <div class="tabs">
+        <button class="tab active" id="tab-login" onclick="switchTab('login')">تسجيل الدخول</button>
+        <button class="tab" id="tab-register" onclick="switchTab('register')">إنشاء حساب</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="form-login" class="auth-form" onsubmit="handleLogin(event)">
+        <div class="field">
+          <label>اسم المستخدم</label>
+          <input type="text" id="login-username" placeholder="أدخل اسم المستخدم" required autocomplete="username" />
+        </div>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <div class="pw-wrap">
+            <input type="password" id="login-password" placeholder="أدخل كلمة المرور" required autocomplete="current-password" />
+            <button type="button" class="eye-btn" onclick="togglePw('login-password', this)">👁</button>
+          </div>
+        </div>
+        <div class="error-msg" id="login-error"></div>
+        <button type="submit" class="btn-primary" id="login-btn">
+          <span class="btn-text">دخول</span>
+          <span class="btn-loader" hidden>...</span>
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="form-register" class="auth-form hidden" onsubmit="handleRegister(event)">
+        <div class="field">
+          <label>الاسم الكامل</label>
+          <input type="text" id="reg-name" placeholder="اسمك الكامل" required />
+        </div>
+        <div class="field">
+          <label>اسم المستخدم</label>
+          <input type="text" id="reg-username" placeholder="username (بدون مسافات)" required pattern="[a-zA-Z0-9_]+" />
+          <small>أحرف إنجليزية وأرقام وـ فقط</small>
+        </div>
+        <div class="field">
+          <label>كلمة المرور</label>
+          <div class="pw-wrap">
+            <input type="password" id="reg-password" placeholder="8 أحرف على الأقل" required minlength="8" />
+            <button type="button" class="eye-btn" onclick="togglePw('reg-password', this)">👁</button>
+          </div>
+        </div>
+        <div class="error-msg" id="reg-error"></div>
+        <button type="submit" class="btn-primary" id="reg-btn">
+          <span class="btn-text">إنشاء الحساب</span>
+        </button>
+      </form>
+    </div>
+
+    <p class="privacy-note">🔒 كلمة مرورك مشفرة ولا نستطيع رؤيتها أبداً</p>
+  </div>
+
+  <script src="/js/auth.js"></script>
+</body>
+</html>

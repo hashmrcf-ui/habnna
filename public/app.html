@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>آمين — المحادثات</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Header -->
+      <div class="sidebar-header">
+        <div class="user-mini" id="my-avatar-area">
+          <img class="avatar" id="my-avatar" src="" alt="Me" />
+          <div>
+            <div class="user-mini-name" id="my-name">...</div>
+            <div class="user-mini-status">● متصل</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" id="search-btn" title="بحث عن مستخدم" onclick="toggleSearch()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </button>
+          <button class="icon-btn" title="مجموعة جديدة" onclick="openGroupModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </button>
+          <button class="icon-btn" title="تسجيل الخروج" onclick="logout()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search Box -->
+      <div class="search-area hidden" id="search-area">
+        <input type="text" id="search-input" placeholder="ابحث عن مستخدم..." oninput="searchUsers(this.value)" />
+        <div class="search-results" id="search-results"></div>
+      </div>
+
+      <!-- Conversations List -->
+      <div class="section-label">المحادثات</div>
+      <div class="conv-list" id="conv-list">
+        <div class="empty-state">لا توجد محادثات بعد<br/>ابحث عن مستخدم للبدء</div>
+      </div>
+    </aside>
+
+    <!-- ── Main Chat Area ── -->
+    <main class="chat-area" id="chat-area">
+      <!-- Welcome Screen -->
+      <div class="welcome-screen" id="welcome-screen">
+        <div class="welcome-logo">
+          <svg viewBox="0 0 80 80" fill="none" width="80">
+            <circle cx="40" cy="40" r="38" fill="url(#wg1)" opacity="0.15"/>
+            <path d="M24 30h32M24 40h20M24 50h26" stroke="#6C63FF" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="58" cy="50" r="8" fill="#00D4AA" opacity="0.9"/>
+            <path d="M55 50l2 2 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs><linearGradient id="wg1" x1="0" y1="0" x2="80" y2="80"><stop stop-color="#6C63FF"/><stop offset="1" stop-color="#00D4AA"/></linearGradient></defs>
+          </svg>
+        </div>
+        <h2>مرحباً بك في آمين</h2>
+        <p>ابدأ محادثة مشفرة آمنة مع أي شخص</p>
+        <div class="feature-pills">
+          <span>🔐 تشفير E2E</span>
+          <span>⚡ فوري</span>
+          <span>🕵️ خاص تماماً</span>
+        </div>
+      </div>
+
+      <!-- Chat Header -->
+      <div class="chat-header hidden" id="chat-header">
+        <button class="icon-btn back-btn" onclick="closeChat()">←</button>
+        <img class="avatar" id="chat-avatar" src="" alt="" />
+        <div class="chat-header-info">
+          <div class="chat-header-name" id="chat-name">...</div>
+          <div class="chat-header-status" id="chat-status">متصل</div>
+        </div>
+        <div class="chat-header-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          مشفر
+        </div>
+        <button class="icon-btn call-btn" id="audio-call-btn" title="مكالمة صوتية" onclick="initiateCall('audio')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.6 4.38 2 2 0 0 1 3.58 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.16 6.16l1.48-1.48a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+        <button class="icon-btn call-btn" id="video-call-btn" title="مكالمة مرئية" onclick="initiateCall('video')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        </button>
+      </div>
+
+      <!-- Messages Area -->
+      <div class="messages-area hidden" id="messages-area">
+        <div class="messages-list" id="messages-list"></div>
+      </div>
+
+      <!-- Typing Indicator -->
+      <div class="typing-indicator hidden" id="typing-indicator">
+        <span></span><span></span><span></span>
+        <small id="typing-name">يكتب...</small>
+      </div>
+
+      <!-- Message Input -->
+      <div class="message-input-area hidden" id="message-input-area">
+        <div class="input-encryption-note">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00D4AA" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          رسائلك مشفرة من طرف لطرف
+        </div>
+        <div class="input-row">
+          <button class="icon-btn attach-btn" title="إرفاق ملف" onclick="attachFile()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <div class="msg-input-wrap">
+            <textarea
+              id="msg-input"
+              placeholder="اكتب رسالة..."
+              rows="1"
+              onkeydown="handleMsgKey(event)"
+              oninput="handleTyping()"
+            ></textarea>
+          </div>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- File input (hidden) -->
+  <input type="file" id="file-input" hidden onchange="handleFileSelected(event)" />
+
+  <!-- ── Incoming Call UI ── -->
+  <div class="incoming-call-ui hidden" id="incoming-call-ui">
+    <div class="incoming-call-card">
+      <img class="incoming-avatar" id="incoming-caller-avatar" src="" alt="" />
+      <div class="incoming-info">
+        <div class="incoming-name" id="incoming-caller-name">...</div>
+        <div class="incoming-type" id="incoming-call-type">مكالمة صوتية واردة</div>
+      </div>
+      <div class="incoming-actions">
+        <button class="call-action-btn reject" onclick="AmeenCall.rejectCall()" title="رفض">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <button class="call-action-btn accept" onclick="AmeenCall.answerCall()" title="قبول">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13 19.79 19.79 0 0 1 1.6 4.38 2 2 0 0 1 3.58 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.16 6.16l1.48-1.48a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Full Screen Call Overlay ── -->
+  <div class="call-overlay hidden" id="call-overlay">
+    <!-- Video area (shown for video calls) -->
+    <div class="call-video-area hidden" id="call-video-area">
+      <video id="call-remote-video" autoplay playsinline class="remote-video"></video>
+      <video id="call-local-video" autoplay playsinline muted class="local-video"></video>
+    </div>
+    <!-- Audio element for audio calls -->
+    <audio id="call-remote-audio" autoplay></audio>
+
+    <!-- Call Info (shown for audio calls or when video hidden) -->
+    <div class="call-info">
+      <img class="call-peer-avatar" id="call-peer-avatar" src="" alt="" />
+      <div class="call-peer-name" id="call-peer-name">...</div>
+      <div class="call-type-label" id="call-type-label">مكالمة صوتية</div>
+      <div class="call-status" id="call-status">جارٍ الاتصال...</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="call-controls">
+      <button class="call-ctrl-btn" id="call-mute-btn" onclick="AmeenCall.toggleMute()" title="كتم الصوت">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+      <button class="call-ctrl-btn end-call" onclick="AmeenCall.endCall()" title="إنهاء المكالمة">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
+      </button>
+      <button class="call-ctrl-btn hidden" id="call-video-btn" onclick="AmeenCall.toggleVideo()" title="إيقاف الكاميرا">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Group Creation Modal ── -->
+  <div class="modal-backdrop hidden" id="group-modal" onclick="closeGroupModalOutside(event)">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>إنشاء مجموعة / قناة</h3>
+        <button class="icon-btn" onclick="closeGroupModal()">×</button>
+      </div>
+
+      <!-- Type selector -->
+      <div class="group-type-tabs">
+        <button class="type-tab active" id="tab-group" onclick="setGroupType('group')">👥 مجموعة</button>
+        <button class="type-tab" id="tab-channel" onclick="setGroupType('channel')">📢 قناة</button>
+      </div>
+
+      <!-- Name -->
+      <div class="form-field">
+        <label>اسم المجموعة</label>
+        <input type="text" id="group-name-input" placeholder="ابتكاريون للأعمال، الأسرة..." maxlength="60" />
+      </div>
+
+      <!-- Member search -->
+      <div class="form-field">
+        <label>إضافة أعضاء</label>
+        <input type="text" id="group-member-search" placeholder="ابحث عن مستخدم..." oninput="searchGroupMembers(this.value)" />
+        <div class="group-member-results" id="group-member-results"></div>
+      </div>
+
+      <!-- Selected members -->
+      <div class="selected-members" id="selected-members"></div>
+
+      <div class="modal-type-hint" id="modal-type-hint">
+        في المجموعة يمكن للجميع الإرسال، في القناة فقط المسؤول
+      </div>
+
+      <button class="create-group-btn" onclick="createGroup()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        إنشاء
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/crypto.js"></script>
+  <script src="/js/call.js"></script>
+  <script src="/js/chat.js"></script>
+</body>
+</html>
