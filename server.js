@@ -175,11 +175,81 @@ app.post('/api/login', authLimiter, async (req, res) => {
     return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
   }
 
-  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+
+  // Issue refresh token
+  const refreshToken = require('crypto').randomBytes(40).toString('hex');
+  const refreshHash  = require('crypto').createHash('sha256').update(refreshToken).digest('hex');
+  const refreshExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+  db.saveRefreshToken(user.id, refreshHash, refreshExpiry);
+
   secLog('LOGIN_OK', { userId: user.id, ip: req.ip });
-  res.json({ token, user: { ...db.safeUser(user), isOnline: true } });
+  res.json({ token, refreshToken, user: { ...db.safeUser(user), isOnline: true } });
 });
 
+// ── Refresh Token Route ───────────────────────────────────────────
+app.post('/api/auth/refresh', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'refresh token مفقود' });
+
+  const hash = require('crypto').createHash('sha256').update(refreshToken).digest('hex');
+  const record = db.getRefreshToken(hash);
+  if (!record) return res.status(401).json({ error: 'جلسة منتهية أو ملغاة' });
+
+  const user = db.getUserById(record.user_id);
+  if (!user) return res.status(401).json({ error: 'مستخدم غير موجود' });
+
+  const newToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '15m' });
+  res.json({ token: newToken });
+});
+
+// ── Logout All Devices ────────────────────────────────────────────
+app.post('/api/auth/logout-all', authMiddleware, (req, res) => {
+  db.revokeAllUserTokens(req.userId);
+  secLog('LOGOUT_ALL', { userId: req.userId, ip: req.ip });
+  res.json({ ok: true });
+});
+
+// ── 2FA Setup ────────────────────────────────────────────────────
+const speakeasy = require('speakeasy');
+const QRCode    = require('qrcode');
+
+app.post('/api/auth/2fa/setup', authMiddleware, async (req, res) => {
+  const user = db.getUserById(req.userId);
+  const secret = speakeasy.generateSecret({ name: `آمين ماسنجر (${user.username})`, length: 20 });
+  db.setTotpSecret(req.userId, secret.base32);
+  const qrDataUrl = await QRCode.toDataURL(secret.otpauth_url);
+  res.json({ secret: secret.base32, qr: qrDataUrl });
+});
+
+app.post('/api/auth/2fa/enable', authMiddleware, (req, res) => {
+  const { code } = req.body;
+  const user = db.getUserById(req.userId);
+  if (!user?.totpSecret) return res.status(400).json({ error: 'ابدأ الإعداد أولاً' });
+
+  const valid = speakeasy.totp.verify({ secret: user.totpSecret, encoding: 'base32', token: code, window: 1 });
+  if (!valid) return res.status(400).json({ error: 'رمز التحقق غير صحيح' });
+
+  db.enableTotp(req.userId);
+  secLog('2FA_ENABLED', { userId: req.userId });
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/2fa/disable', authMiddleware, (req, res) => {
+  const { code } = req.body;
+  const user = db.getUserById(req.userId);
+  if (!user?.totpEnabled) return res.status(400).json({ error: '2FA غير مفعّل' });
+
+  const valid = speakeasy.totp.verify({ secret: user.totpSecret, encoding: 'base32', token: code, window: 1 });
+  if (!valid) return res.status(400).json({ error: 'رمز التحقق غير صحيح' });
+
+  db.disableTotp(req.userId);
+  secLog('2FA_DISABLED', { userId: req.userId });
+  res.json({ ok: true });
+});
+
+// Cleanup expired refresh tokens every 6 hours
+setInterval(() => db.cleanExpiredTokens(), 6 * 60 * 60 * 1000);
 
 app.get('/api/users/search', authMiddleware, (req, res) => {
   const q = (req.query.q || '').trim();

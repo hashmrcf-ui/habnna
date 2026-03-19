@@ -61,7 +61,24 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_id, timestamp);
   CREATE INDEX IF NOT EXISTS idx_members_user ON conversation_members(user_id);
+
+  CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at INTEGER NOT NULL,
+    revoked    INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_rt_user ON refresh_tokens(user_id);
+  CREATE INDEX IF NOT EXISTS idx_rt_hash ON refresh_tokens(token_hash);
 `);
+
+// Add 2FA columns if they don't exist (safe ALTER TABLE)
+try { db.exec(`ALTER TABLE users ADD COLUMN totp_secret TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0`); } catch {}
 
 // ── User Queries ─────────────────────────────────────────────────
 const userQueries = {
@@ -251,13 +268,15 @@ function mapUser(row) {
     avatar: row.avatar,
     hashedPw: row.hashed_pw,
     status: row.status,
+    totpSecret: row.totp_secret || null,
+    totpEnabled: !!row.totp_enabled,
     createdAt: row.created_at
   };
 }
 
 function safeUser(user) {
   if (!user) return null;
-  const { hashedPw, ...safe } = user;
+  const { hashedPw, totpSecret, ...safe } = user;
   return safe;
 }
 
@@ -275,9 +294,60 @@ function mapMessage(row) {
   };
 }
 
+// ── Refresh Token Functions ───────────────────────────────────────
+const rtQueries = {
+  save:      db.prepare(`INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)`),
+  findHash:  db.prepare(`SELECT * FROM refresh_tokens WHERE token_hash = ? AND revoked = 0 AND expires_at > ?`),
+  revoke:    db.prepare(`UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = ?`),
+  revokeAll: db.prepare(`UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?`),
+  cleanup:   db.prepare(`DELETE FROM refresh_tokens WHERE expires_at < ? OR revoked = 1`)
+};
+
+function saveRefreshToken(userId, tokenHash, expiresAt) {
+  const { randomUUID } = require('crypto');
+  rtQueries.save.run(randomUUID(), userId, tokenHash, expiresAt);
+}
+
+function getRefreshToken(tokenHash) {
+  return rtQueries.findHash.get(tokenHash, Date.now()) || null;
+}
+
+function revokeRefreshToken(tokenHash) {
+  rtQueries.revoke.run(tokenHash);
+}
+
+function revokeAllUserTokens(userId) {
+  rtQueries.revokeAll.run(userId);
+}
+
+function cleanExpiredTokens() {
+  rtQueries.cleanup.run(Date.now());
+}
+
+// ── 2FA Functions ─────────────────────────────────────────────────
+const totpQueries = {
+  setSecret: db.prepare(`UPDATE users SET totp_secret = ? WHERE id = ?`),
+  enable:    db.prepare(`UPDATE users SET totp_enabled = 1 WHERE id = ?`),
+  disable:   db.prepare(`UPDATE users SET totp_enabled = 0, totp_secret = NULL WHERE id = ?`)
+};
+
+function setTotpSecret(userId, secret) {
+  totpQueries.setSecret.run(secret, userId);
+}
+
+function enableTotp(userId) {
+  totpQueries.enable.run(userId);
+}
+
+function disableTotp(userId) {
+  totpQueries.disable.run(userId);
+}
+
 module.exports = {
   createUser, getUserByUsername, getUserById, searchUsers,
   findDirectConv, createConversation, addConvMember, removeConvMember,
   getConversationMembers, isConvMember, getUserConversations,
-  getGroupInfo, insertMessage, getMessages, updateMessageStatus, safeUser
+  getGroupInfo, insertMessage, getMessages, updateMessageStatus, safeUser,
+  saveRefreshToken, getRefreshToken, revokeRefreshToken, revokeAllUserTokens, cleanExpiredTokens,
+  setTotpSecret, enableTotp, disableTotp
 };

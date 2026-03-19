@@ -39,6 +39,7 @@ async function handleLogin(e) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     localStorage.setItem('ameen_token', data.token);
+    if (data.refreshToken) localStorage.setItem('ameen_refresh_token', data.refreshToken);
     localStorage.setItem('ameen_user', JSON.stringify(data.user));
     window.location.href = '/app.html';
   } catch (err) {
@@ -64,6 +65,7 @@ async function handleRegister(e) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     localStorage.setItem('ameen_token', data.token);
+    if (data.refreshToken) localStorage.setItem('ameen_refresh_token', data.refreshToken);
     localStorage.setItem('ameen_user', JSON.stringify(data.user));
     window.location.href = '/app.html';
   } catch (err) {

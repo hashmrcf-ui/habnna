@@ -2,12 +2,14 @@
  * Ameen Chat — Real-time messaging with Socket.io
  */
 
-const TOKEN = localStorage.getItem('ameen_token');
+let currentToken = localStorage.getItem('ameen_token');
+const REFRESH_TOKEN = localStorage.getItem('ameen_refresh_token');
 const ME = JSON.parse(localStorage.getItem('ameen_user') || 'null');
 
 // Guard: redirect if not logged in
-if (!TOKEN || !ME) window.location.href = '/';
+if (!currentToken || !ME) window.location.href = '/';
 
+const TOKEN = currentToken; // alias for Socket.io auth (set once on connect)
 const API = '';
 let socket;
 let activeConvId = null;
@@ -15,6 +17,29 @@ let typingTimer = null;
 let conversations = {};
 let unreadCounts = {};
 let cryptoKeys = null; // { publicKey, privateKey }
+
+// ── Auto Token Refresh ────────────────────────────────────────────
+async function refreshAccessToken() {
+  if (!REFRESH_TOKEN) return;
+  try {
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: REFRESH_TOKEN })
+    });
+    if (res.ok) {
+      const { token } = await res.json();
+      currentToken = token;
+      localStorage.setItem('ameen_token', token);
+    } else {
+      // Refresh token invalid — logout
+      logout();
+    }
+  } catch {}
+}
+// Refresh every 12 minutes (access token expires in 15m)
+setInterval(refreshAccessToken, 12 * 60 * 1000);
+
 
 // ── Initialization ────────────────────────────────────────────
 async function init() {
