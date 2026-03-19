@@ -395,6 +395,63 @@ async function sendPushToUser(userId, payload) {
   }
 }
 
+// ── Health Check ──────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()) + 's',
+    memoryMB: Math.round(mem.rss / 1024 / 1024),
+    onlineUsers: onlineUsers.size,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ── Account Deletion (GDPR) ───────────────────────────────────────
+app.delete('/api/account', authMiddleware, async (req, res) => {
+  const { password } = req.body;
+  const user = db.getUserById(req.userId);
+  if (!user) return res.status(404).json({ error: 'مستخدم غير موجود' });
+
+  const valid = await bcrypt.compare(password || '', user.hashedPw);
+  if (!valid) return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
+
+  db.revokeAllUserTokens(req.userId);
+  db.deleteUserAccount(req.userId);
+  secLog('ACCOUNT_DELETED', { userId: req.userId, ip: req.ip });
+
+  const sid = onlineUsers.get(req.userId);
+  if (sid) io.to(sid).emit('force:logout', { reason: 'account_deleted' });
+  onlineUsers.delete(req.userId);
+
+  res.json({ ok: true, message: 'تم حذف حسابك نهائياً' });
+});
+
+// ── Automated Backup (every 6 hours) ─────────────────────────────
+const DB_PATH = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'ameen.db');
+const BACKUP_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'backups')
+  : path.join(__dirname, 'backups');
+
+if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+function runBackup() {
+  const date = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const dest = path.join(BACKUP_DIR, `ameen-${date}.db`);
+  fs.copyFile(DB_PATH, dest, (err) => {
+    if (err) { secLog('BACKUP_FAIL', { error: err.message }); return; }
+    secLog('BACKUP_OK', { file: `ameen-${date}.db` });
+    // Keep only last 12 backups (3 days)
+    try {
+      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.db')).sort().reverse();
+      files.slice(12).forEach(f => { try { fs.unlinkSync(path.join(BACKUP_DIR, f)); } catch {} });
+    } catch {}
+  });
+}
+
+setInterval(runBackup, 6 * 60 * 60 * 1000);
+setTimeout(runBackup, 10000); // First backup 10s after startup
+
 // ── Socket.io ────────────────────────────────────────────────────
 io.use((socket, next) => {
   try {

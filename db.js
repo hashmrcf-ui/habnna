@@ -343,11 +343,27 @@ function disableTotp(userId) {
   totpQueries.disable.run(userId);
 }
 
+// ── Account Deletion (GDPR) ───────────────────────────────────────
+const deleteQueries = {
+  anonMessages:  db.prepare(`UPDATE messages SET sender_name = '[محذوف]', content = '[تم حذف المحتوى]' WHERE sender_id = ?`),
+  delMembership: db.prepare(`DELETE FROM conversation_members WHERE user_id = ?`),
+  delTokens:     db.prepare(`DELETE FROM refresh_tokens WHERE user_id = ?`),
+  delUser:       db.prepare(`DELETE FROM users WHERE id = ?`)
+};
+
+const deleteUserAccount = db.transaction((userId) => {
+  deleteQueries.anonMessages.run(userId);
+  deleteQueries.delMembership.run(userId);
+  deleteQueries.delTokens.run(userId);
+  deleteQueries.delUser.run(userId);
+});
+
 module.exports = {
   createUser, getUserByUsername, getUserById, searchUsers,
   findDirectConv, createConversation, addConvMember, removeConvMember,
   getConversationMembers, isConvMember, getUserConversations,
   getGroupInfo, insertMessage, getMessages, updateMessageStatus, safeUser,
   saveRefreshToken, getRefreshToken, revokeRefreshToken, revokeAllUserTokens, cleanExpiredTokens,
-  setTotpSecret, enableTotp, disableTotp
+  setTotpSecret, enableTotp, disableTotp,
+  deleteUserAccount
 };

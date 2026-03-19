@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سياسة الخصوصية — آمين ماسنجر</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      line-height: 1.8;
+    }
+    header {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      padding: 24px 40px;
+      border-bottom: 1px solid #6C63FF33;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 { font-size: 1.5rem; color: #6C63FF; }
+    header span { color: #888; font-size: 0.9rem; }
+    .container { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
+    h2 { color: #6C63FF; margin: 32px 0 12px; font-size: 1.2rem; }
+    p { color: #ccc; margin-bottom: 12px; }
+    ul { color: #ccc; padding-right: 24px; margin-bottom: 12px; }
+    ul li { margin-bottom: 6px; }
+    .highlight {
+      background: #1a1a2e;
+      border-right: 4px solid #6C63FF;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .badge {
+      display: inline-block;
+      background: #6C63FF22;
+      color: #6C63FF;
+      border: 1px solid #6C63FF44;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      margin-left: 8px;
+    }
+    footer {
+      text-align: center;
+      padding: 40px;
+      color: #555;
+      font-size: 0.85rem;
+      border-top: 1px solid #222;
+    }
+    a { color: #6C63FF; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>🔒 آمين ماسنجر</h1>
+      <span>سياسة الخصوصية — آخر تحديث: مارس 2026</span>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <div class="highlight">
+      <strong>ملخص سريع:</strong> لا نبيع بياناتك. لا نشاركها مع أي طرف ثالث. محتوى رسائلك مشفر ولا يمكننا الاطلاع عليه.
+    </div>
+
+    <h2>1. ما البيانات التي نجمعها؟</h2>
+    <ul>
+      <li><strong>بيانات الحساب:</strong> اسم المستخدم، الاسم المعروض، كلمة مرور مشفرة (bcrypt)</li>
+      <li><strong>الرسائل:</strong> تُخزّن على السيرفر مشفرة — لا نستطيع قراءة محتواها</li>
+      <li><strong>بيانات الاتصال:</strong> توقيت الاتصال وعنوان IP لأغراض الأمان فقط</li>
+    </ul>
+
+    <h2>2. ما الذي <strong>لا</strong> نجمعه؟</h2>
+    <ul>
+      <li>❌ لا نجمع بيانات موقعك الجغرافي</li>
+      <li>❌ لا نجمع معلومات الدفع (الخدمة مجانية)</li>
+      <li>❌ لا نستخدم ملفات تتبع (Tracking Cookies)</li>
+      <li>❌ لا نشارك أي بيانات مع Google أو Facebook أو أي طرف ثالث</li>
+    </ul>
+
+    <h2>3. كيف نحمي بياناتك؟</h2>
+    <ul>
+      <li>🔐 تشفير كلمات المرور بـ bcrypt (cost 12)</li>
+      <li>🛡️ HTTPS إلزامي على جميع الاتصالات</li>
+      <li>🔑 رموز JWT قصيرة الأمد (15 دقيقة)</li>
+      <li>🚦 تحديد معدل الطلبات لمنع هجمات Brute Force</li>
+      <li>💾 نسخ احتياطية مشفرة كل 6 ساعات</li>
+      <li>📋 سجلات أمنية لرصد المحاولات المشبوهة</li>
+    </ul>
+
+    <h2>4. حقك في بياناتك <span class="badge">GDPR</span></h2>
+    <p>لديك الحق الكامل في:</p>
+    <ul>
+      <li>✅ <strong>الاطلاع</strong> على بياناتك المخزنة</li>
+      <li>✅ <strong>تصحيح</strong> معلوماتك في أي وقت</li>
+      <li>✅ <strong>حذف حسابك</strong> نهائياً مع كل بياناتك من الإعدادات</li>
+      <li>✅ <strong>تصدير</strong> محادثاتك (قريباً)</li>
+    </ul>
+
+    <div class="highlight">
+      <strong>حذف الحساب:</strong> اذهب إلى الإعدادات → حذف الحساب. سيُحذف حسابك وجميع رسائلك فوراً ونهائياً ولا يمكن التراجع عن ذلك.
+    </div>
+
+    <h2>5. مدة الاحتفاظ بالبيانات</h2>
+    <ul>
+      <li>الرسائل: تبقى حتى تحذف المحادثة أو الحساب</li>
+      <li>سجلات الأمان: تُحذف تلقائياً بعد 30 يوماً</li>
+      <li>جلسات الدخول: تنتهي تلقائياً بعد 30 يوماً من عدم الاستخدام</li>
+    </ul>
+
+    <h2>6. ملفات الجلسة (Cookies)</h2>
+    <p>نستخدم <strong>localStorage</strong> فقط لحفظ حالة تسجيل الدخول — لا نستخدم ملفات Cookies للتتبع.</p>
+
+    <h2>7. التواصل معنا</h2>
+    <p>لأي استفسار أو طلب متعلق بخصوصيتك، تواصل معنا عبر: <a href="mailto:privacy@ameen.chat">privacy@ameen.chat</a></p>
+
+  </div>
+
+  <footer>
+    <p>آمين ماسنجر © 2026 — نؤمن بأن الخصوصية حق أساسي</p>
+    <p><a href="/app.html">العودة للتطبيق</a></p>
+  </footer>
+</body>
+</html>
