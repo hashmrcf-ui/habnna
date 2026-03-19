@@ -108,9 +108,28 @@
           رسائلك مشفرة من طرف لطرف
         </div>
         <div class="input-row">
-          <button class="icon-btn attach-btn" title="إرفاق ملف" onclick="attachFile()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          </button>
+
+          <!-- Attachment popup -->
+          <div class="attach-menu-wrap" id="attach-menu-wrap">
+            <div class="attach-popup" id="attach-popup">
+              <button class="attach-opt" onclick="triggerFileInput('image/*')" style="--c:#25D366">
+                <span class="attach-opt-icon">🖼️</span>
+                <span>صور وفيديو</span>
+              </button>
+              <button class="attach-opt" onclick="triggerFileInput('.pdf,.doc,.docx,.txt,.zip')" style="--c:#34B7F1">
+                <span class="attach-opt-icon">📄</span>
+                <span>مستند</span>
+              </button>
+              <button class="attach-opt" onclick="triggerFileInput('audio/*')" style="--c:#FF6B6B">
+                <span class="attach-opt-icon">🎵</span>
+                <span>صوت</span>
+              </button>
+            </div>
+            <button class="icon-btn attach-btn" id="attach-toggle-btn" title="إرفاق" onclick="toggleAttachMenu()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+
           <div class="msg-input-wrap">
             <textarea
               id="msg-input"
@@ -130,6 +149,28 @@
 
   <!-- File input (hidden) -->
   <input type="file" id="file-input" hidden onchange="handleFileSelected(event)" />
+
+  <!-- Image Preview Modal (WhatsApp-style) -->
+  <div class="img-preview-modal hidden" id="img-preview-modal">
+    <div class="img-preview-header">
+      <button class="img-preview-close" onclick="closeImgPreview()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <span>إرسال صورة</span>
+      <div></div>
+    </div>
+    <div class="img-preview-body">
+      <img id="img-preview-img" src="" alt="" />
+    </div>
+    <div class="img-preview-footer">
+      <div class="img-caption-wrap">
+        <input type="text" id="img-caption-input" placeholder="أضف تعليقاً..." maxlength="200" onkeydown="if(event.key==='Enter') confirmSendImage()" />
+      </div>
+      <button class="img-send-btn" onclick="confirmSendImage()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
 
   <!-- ── Incoming Call UI ── -->
   <div class="incoming-call-ui hidden" id="incoming-call-ui">

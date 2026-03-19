@@ -642,5 +642,170 @@ textarea#msg-input::placeholder { color: rgba(255,255,255,0.25); }
   padding-right: 4px;
 }
 
+/* ── Attachment Popup Menu ── */
+.attach-menu-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.attach-popup {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  right: 0;
+  background: #1a1a35;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.95);
+  transform-origin: bottom right;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 100;
+}
+.attach-popup.open {
+  opacity: 1;
+  pointer-events: all;
+  transform: translateY(0) scale(1);
+}
+.attach-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s;
+  text-align: right;
+  width: 100%;
+}
+.attach-opt:hover {
+  background: rgba(255,255,255,0.06);
+}
+.attach-opt-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--c, #6C63FF);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.attach-btn {
+  transition: transform 0.2s;
+}
+.attach-btn.active {
+  transform: rotate(45deg);
+  background: rgba(108,99,255,0.2) !important;
+}
 
+/* ── Image Preview Modal ── */
+.img-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: #0a0a1a;
+  display: flex;
+  flex-direction: column;
+  animation: fadeInUp 0.2s ease;
+}
+.img-preview-modal.hidden { display: none; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.img-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 1rem;
+  font-weight: 600;
+}
+.img-preview-close {
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.img-preview-close svg { width: 22px; height: 22px; }
+.img-preview-close:hover { background: rgba(255,255,255,0.08); }
+.img-preview-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+}
+.img-preview-body img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 14px;
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+.img-preview-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.img-caption-wrap {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 10px 18px;
+}
+.img-caption-wrap input {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.92rem;
+  width: 100%;
+  direction: rtl;
+}
+.img-caption-wrap input::placeholder { color: var(--text-muted); }
+.img-send-btn {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.img-send-btn svg { width: 20px; height: 20px; }
+.img-send-btn:hover { background: var(--primary-dark); transform: scale(1.05); }
 
+/* ── Image caption in chat bubble ── */
+.img-caption-text {
+  font-size: 0.85rem;
+  padding: 6px 8px 2px;
+  color: var(--text);
+  direction: rtl;
+}

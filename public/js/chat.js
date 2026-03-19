@@ -405,8 +405,19 @@ function appendMessage(msg, animate = true) {
   // Render based on message type
   if (msg.type === 'image') {
     bubble.classList.add('msg-bubble-image');
+    // Content may be a plain URL or JSON { url, caption }
+    let imgUrl = msg.content;
+    let caption = '';
+    if (msg.content && msg.content.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(msg.content);
+        imgUrl = parsed.url;
+        caption = parsed.caption || '';
+      } catch {}
+    }
     bubble.innerHTML = `
-      <img src="${msg.content}" alt="صورة" class="chat-image" onclick="viewImage(this.src)" loading="lazy" />
+      <img src="${imgUrl}" alt="صورة" class="chat-image" onclick="viewImage('${imgUrl}')" loading="lazy" />
+      ${caption ? `<div class="img-caption-text">${escHtml(caption)}</div>` : ''}
     `;
   } else if (msg.type === 'file') {
     // Parse JSON file data stored in content
@@ -508,10 +519,44 @@ function handleTyping() {
 }
 
 // ── File Attachment ───────────────────────────────────────────
-function attachFile() {
-  if (!activeConvId) return showToast('📎 افتح محادثة أولاً');
-  document.getElementById('file-input').click();
+let _pendingImageFile = null; // file waiting in preview modal
+
+function toggleAttachMenu() {
+  const popup = document.getElementById('attach-popup');
+  const btn   = document.getElementById('attach-toggle-btn');
+  const open  = popup.classList.toggle('open');
+  btn.classList.toggle('active', open);
+
+  // Close on outside click
+  if (open) {
+    setTimeout(() => {
+      document.addEventListener('click', _closeAttachOnOutside, { once: true });
+    }, 0);
+  }
 }
+
+function _closeAttachOnOutside(e) {
+  if (!e.target.closest('#attach-menu-wrap')) {
+    const popup = document.getElementById('attach-popup');
+    const btn   = document.getElementById('attach-toggle-btn');
+    popup.classList.remove('open');
+    btn.classList.remove('active');
+  }
+}
+
+function triggerFileInput(accept) {
+  // Close menu first
+  document.getElementById('attach-popup').classList.remove('open');
+  document.getElementById('attach-toggle-btn').classList.remove('active');
+
+  if (!activeConvId) return showToast('📎 افتح محادثة أولاً');
+  const input = document.getElementById('file-input');
+  input.accept = accept;
+  input.click();
+}
+
+// legacy shim (still referenced by old code paths)
+function attachFile() { toggleAttachMenu(); }
 
 async function handleFileSelected(event) {
   const file = event.target.files[0];
@@ -522,44 +567,66 @@ async function handleFileSelected(event) {
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) return showToast('❌ الملف أكبر من 10MB');
 
-  // Show image preview immediately (optimistic UI)
   if (isImage) {
+    // Show WhatsApp-style preview modal instead of uploading immediately
+    _pendingImageFile = file;
     const reader = new FileReader();
-    reader.onload = (e) => {
-      appendMessage({
-        id: 'preview-' + Date.now(),
-        senderId: ME.id,
-        type: 'image',
-        content: e.target.result,
-        timestamp: Date.now(),
-        _preview: true
-      });
-      scrollToBottom();
-    };
+    reader.onload = (e) => openImgPreview(e.target.result);
     reader.readAsDataURL(file);
+    return;
   }
 
-  // Upload with progress tracking via XHR
+  // Non-image: upload directly with progress
   try {
     const data = await uploadWithProgress(file);
-
-    // Remove preview bubble and send real message
-    const preview = document.querySelector('[data-preview]');
-    if (preview) preview.closest('.msg-group')?.remove();
-
     socket.emit('message:send', {
       convId: activeConvId,
-      content: isImage ? data.url : JSON.stringify({ url: data.url, name: data.name, size: data.size }),
-      type: isImage ? 'image' : 'file'
+      content: JSON.stringify({ url: data.url, name: data.name, size: data.size }),
+      type: 'file'
     });
-
     showToast(`✅ تم إرسال: ${file.name}`);
   } catch (e) {
-    // Remove broken preview
-    document.querySelectorAll('[data-preview]').forEach(el => el.closest('.msg-group')?.remove());
     showToast('❌ فشل رفع الملف');
   }
 }
+
+function openImgPreview(dataUrl) {
+  document.getElementById('img-preview-img').src = dataUrl;
+  document.getElementById('img-caption-input').value = '';
+  document.getElementById('img-preview-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('img-caption-input').focus(), 200);
+}
+
+function closeImgPreview() {
+  document.getElementById('img-preview-modal').classList.add('hidden');
+  document.getElementById('img-preview-img').src = '';
+  _pendingImageFile = null;
+}
+
+async function confirmSendImage() {
+  if (!_pendingImageFile || !activeConvId) return;
+  const caption = document.getElementById('img-caption-input').value.trim();
+  closeImgPreview();
+
+  try {
+    const data = await uploadWithProgress(_pendingImageFile);
+    // Store caption together with URL as JSON so receiver can display it
+    const content = caption
+      ? JSON.stringify({ url: data.url, caption })
+      : data.url;
+    socket.emit('message:send', {
+      convId: activeConvId,
+      content,
+      type: 'image'
+    });
+    showToast('✅ تم إرسال الصورة');
+  } catch (e) {
+    showToast('❌ فشل رفع الصورة');
+  }
+}
+
+
+
 
 function uploadWithProgress(file) {
   return new Promise((resolve, reject) => {
